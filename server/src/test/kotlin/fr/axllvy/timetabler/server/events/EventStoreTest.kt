@@ -163,6 +163,18 @@ class EventStoreTest {
   }
 
   @Test
+  fun `listings whose lineup was never read need one`() {
+    store.upsert(listing("read"))
+    store.upsert(listing("unread"))
+    store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z")))
+    store.archiveBefore(LocalDate(2026, 10, 29))
+
+    store.setLineup(Source.DICE, "read", emptyList())
+
+    store.listingsNeedingLineup().map { it.externalId } shouldContainExactly listOf("unread")
+  }
+
+  @Test
   fun `knows the poster url of an event`() {
     val id = store.upsert(listing("a")).id
 

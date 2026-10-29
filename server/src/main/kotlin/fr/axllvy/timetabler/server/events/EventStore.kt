@@ -185,6 +185,17 @@ class EventStore(private val dataSource: DataSource, private val clock: Clock = 
       }
     }
 
+  /** Listings of live events whose lineup has never been read. */
+  fun listingsNeedingLineup(): List<ListingRef> =
+    dataSource.transaction { c ->
+      c.query(
+        """SELECT l.source, l.external_id, l.url FROM listing l JOIN event e ON e.id = l.event_id
+           WHERE NOT e.archived AND l.lineup_checked_at IS NULL ORDER BY e.starts_at""",
+      ) {
+        ListingRef(Source.valueOf(it.getString(1)), it.getString(2), it.getString(3))
+      }
+    }
+
   /** Source URL of [id]'s poster, or null when the event is unknown or has none. */
   fun posterUrl(id: EventId): String? {
     val uuid = runCatching { UUID.fromString(id.value) }.getOrNull() ?: return null
@@ -253,8 +264,10 @@ class EventStore(private val dataSource: DataSource, private val clock: Clock = 
   private fun Connection.writeLineup(source: Source, externalId: String, lineup: List<String>) {
     val eventId =
       query(
-          "UPDATE listing SET lineup = ? WHERE source = ? AND external_id = ? RETURNING event_id",
+          """UPDATE listing SET lineup = ?, lineup_checked_at = ? WHERE source = ? AND external_id = ?
+             RETURNING event_id""",
           createArrayOf("text", lineup.toTypedArray()),
+          clock.now().ts(),
           source.name,
           externalId,
         ) {

@@ -134,6 +134,18 @@ class DiceScraperTest {
   }
 
   @Test
+  fun `a lineup that failed to load is fetched on the next run`() = runTest {
+    scraper { if (it.url.toString().endsWith(baron)) respondError(HttpStatusCode.GatewayTimeout) else null }
+      .scrapeAgenda()
+    requested.clear()
+
+    scraper().scrapeAgenda()
+
+    requested.filter { "/event/" in it } shouldContainExactlyInAnyOrder listOf("https://dice.fm/event/$baron")
+    store.page(Revision.ZERO, 1000).events.single { it.title.startsWith("Baron") }.lineup.size shouldBe 5
+  }
+
+  @Test
   fun `refresh fetches only events starting in the next two days`() = runTest {
     scraper().scrapeAgenda()
     requested.clear()
