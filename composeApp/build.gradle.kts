@@ -201,6 +201,28 @@ val hashWasmJsBundle by tasks.registering {
 
     hashEntryFile("composeApp.js", htmlAttribute = "src")
     hashEntryFile("styles.css", htmlAttribute = "href")
+
+    // Gives the service worker this build's whole shell to precache, and a cache name per build.
+    val shell =
+      distDir
+        .walkTopDown()
+        .filter { it.isFile && it.name != "sw.js" && !it.name.endsWith(".map") && !it.name.endsWith(".txt") }
+        .map { "/" + it.relativeTo(distDir).invariantSeparatorsPath }
+        .sorted()
+        .toList()
+    val build =
+      MessageDigest.getInstance("SHA-256")
+        .digest(File(distDir, "index.html").readBytes() + shell.joinToString("\n").toByteArray())
+        .joinToString("") { "%02x".format(it) }
+        .take(12)
+    val sw = File(distDir, "sw.js")
+    val original = sw.readText()
+    val rewritten =
+      original
+        .replace("const BUILD = \"dev\";", "const BUILD = \"$build\";")
+        .replace("/*PRECACHE*/[]/*END*/", (listOf("/") + shell).joinToString(", ", "[", "]") { "\"$it\"" })
+    check(rewritten.contains(build) && rewritten.contains("\"/index.html\"")) { "$sw placeholders not found" }
+    sw.writeText(rewritten)
   }
 }
 
