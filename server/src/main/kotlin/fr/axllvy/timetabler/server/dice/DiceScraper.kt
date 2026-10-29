@@ -9,9 +9,13 @@ import fr.axllvy.timetabler.server.http.PoliteFetcher
 import fr.axllvy.timetabler.wire.Source
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.delay
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+
+private val RETRY_PAUSE = 10.seconds
 
 /** Summary of one scrape run; [failed] says why the run stopped early, null when it completed. */
 data class ScrapeReport(val pages: Int, val upserted: Int, val failed: String?)
@@ -40,7 +44,7 @@ class DiceScraper(
       for (category in DICE_CATEGORIES) {
         val url = DiceBrowseParser.dayUrl(category, day)
         val body =
-          when (val result = fetcher.get(url)) {
+          when (val result = fetchRetryingTimeouts(url)) {
             is FetchResult.Ok -> result.body
             is FetchResult.Failed -> {
               val reason = "$url: ${result.status ?: "no response"} ${result.reason}"
@@ -70,6 +74,15 @@ class DiceScraper(
     val refs = store.listingsStartingWithin(48.hours).filter { it.source == Source.DICE }
     fetchLineups(refs)
     return ScrapeReport(refs.size, 0, null)
+  }
+
+  // A request that got no response (timeout, reset) is retried once; an HTTP error is not.
+  private suspend fun fetchRetryingTimeouts(url: String): FetchResult {
+    val first = fetcher.get(url)
+    if (first !is FetchResult.Failed || first.status != null) return first
+    log.w { "Retrying $url after ${first.reason}" }
+    delay(RETRY_PAUSE)
+    return fetcher.get(url)
   }
 
   private suspend fun fetchLineups(refs: Collection<ListingRef>) {

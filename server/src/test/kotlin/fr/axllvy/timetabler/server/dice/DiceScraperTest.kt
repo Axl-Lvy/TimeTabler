@@ -86,6 +86,34 @@ class DiceScraperTest {
   }
 
   @Test
+  fun `a timed out page is retried once`() = runTest {
+    val party = DiceBrowseParser.dayUrl("party", LocalDate(2026, 11, 7))
+    var attempts = 0
+
+    val report =
+      scraper {
+          if (it.url.toString() == party && attempts++ == 0) throw java.io.IOException("Request timeout has expired")
+          else null
+        }
+        .scrapeAgenda()
+
+    report.failed.shouldBeNull()
+    attempts shouldBe 2
+  }
+
+  @Test
+  fun `a page timing out twice stops the run`() = runTest {
+    val party = DiceBrowseParser.dayUrl("party", LocalDate(2026, 11, 7))
+
+    val report =
+      scraper { if (it.url.toString() == party) throw java.io.IOException("Request timeout has expired") else null }
+        .scrapeAgenda()
+
+    report.failed!! shouldContain "timeout"
+    storedTitles().size shouldBe 5
+  }
+
+  @Test
   fun `an event page without data leaves the lineup empty and the run continues`() = runTest {
     val report =
       scraper { if (it.url.toString().endsWith(baron)) respond(fixture("dice/event-without-data.html")) else null }
