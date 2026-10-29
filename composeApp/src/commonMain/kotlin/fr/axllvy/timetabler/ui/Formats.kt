@@ -1,6 +1,8 @@
 package fr.axllvy.timetabler.ui
 
 import fr.axllvy.timetabler.domain.PARIS
+import fr.axllvy.timetabler.wire.ListingDto
+import fr.axllvy.timetabler.wire.ListingStatus
 import kotlin.time.Instant
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
@@ -35,3 +37,13 @@ fun headliners(lineup: List<String>, count: Int = 3): String {
   val rest = lineup.size - count
   return if (rest > 0) "$shown +$rest" else shown
 }
+
+/** Badge of an event card: "cancelled" or "sold out" when every listing says so, else "lineup". */
+fun eventBadge(listings: List<ListingDto>): String =
+  when {
+    listings.isNotEmpty() && listings.all { it.status == ListingStatus.CANCELLED } -> "cancelled"
+    listings.isNotEmpty() &&
+      listings.all { it.status == ListingStatus.SOLD_OUT || it.status == ListingStatus.CANCELLED } ->
+      "sold out"
+    else -> "lineup"
+  }

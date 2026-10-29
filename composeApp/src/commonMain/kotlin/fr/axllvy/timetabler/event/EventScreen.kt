@@ -35,6 +35,7 @@ import fr.axllvy.timetabler.list.Poster
 import fr.axllvy.timetabler.ui.hours
 import fr.axllvy.timetabler.ui.shortDate
 import fr.axllvy.timetabler.wire.EventDto
+import fr.axllvy.timetabler.wire.ListingStatus
 import fr.axllvy.timetabler.wire.Source
 import org.koin.compose.koinInject
 
@@ -73,7 +74,7 @@ private fun EventDetails(event: EventDto) {
   ) {
     event.listings.forEach { listing ->
       Button(onClick = { uriHandler.openUri(listing.url) }) {
-        Text("Tickets on ${listing.source.label()}")
+        Text("Tickets on ${listing.source.label()}${listing.status.suffix()}")
       }
     }
   }
@@ -99,6 +100,14 @@ private fun EventDetails(event: EventDto) {
     }
   }
 }
+
+private fun ListingStatus.suffix(): String =
+  when (this) {
+    ListingStatus.SOLD_OUT -> " (sold out)"
+    ListingStatus.CANCELLED -> " (cancelled)"
+    ListingStatus.ON_SALE,
+    ListingStatus.UNKNOWN -> ""
+  }
 
 private fun Source.label(): String =
   when (this) {

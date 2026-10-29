@@ -1,5 +1,8 @@
 package fr.axllvy.timetabler.ui
 
+import fr.axllvy.timetabler.wire.ListingDto
+import fr.axllvy.timetabler.wire.ListingStatus
+import fr.axllvy.timetabler.wire.Source
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 import kotlin.time.Instant
@@ -25,5 +28,15 @@ class FormatsTest {
   fun `shortens long lineups`() {
     headliners(listOf("A", "B", "C", "D", "E")) shouldBe "A, B, C +2"
     headliners(listOf("A", "B")) shouldBe "A, B"
+  }
+
+  private fun listing(status: ListingStatus) = ListingDto(Source.DICE, "https://dice.fm/event/x", status)
+
+  @Test
+  fun `badges a cancelled or sold out event`() {
+    eventBadge(listOf(listing(ListingStatus.CANCELLED))) shouldBe "cancelled"
+    eventBadge(listOf(listing(ListingStatus.SOLD_OUT), listing(ListingStatus.CANCELLED))) shouldBe "sold out"
+    eventBadge(listOf(listing(ListingStatus.SOLD_OUT), listing(ListingStatus.ON_SALE))) shouldBe "lineup"
+    eventBadge(emptyList()) shouldBe "lineup"
   }
 }
