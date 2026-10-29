@@ -41,3 +41,6 @@ CREATE TABLE IF NOT EXISTS listing (
 );
 
 CREATE INDEX IF NOT EXISTS listing_event_idx ON listing (event_id);
+
+-- Set when the listing's lineup was last read from its event page; null means never.
+ALTER TABLE listing ADD COLUMN IF NOT EXISTS lineup_checked_at timestamptz;

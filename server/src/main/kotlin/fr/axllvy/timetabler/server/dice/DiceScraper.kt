@@ -32,7 +32,8 @@ class DiceScraper(
 
   /**
    * Walks every day from today to [horizonDays] ahead in each music category, then fetches the
-   * lineup of every new or changed listing. Stops at the first failed agenda page.
+   * lineup of every new or changed listing and of every listing whose lineup was never read. Stops
+   * at the first failed agenda page.
    */
   suspend fun scrapeAgenda(): ScrapeReport {
     val today = clock.now().toLocalDateTime(PARIS).date
@@ -49,7 +50,7 @@ class DiceScraper(
             is FetchResult.Failed -> {
               val reason = "$url: ${result.status ?: "no response"} ${result.reason}"
               log.w { "Stopping DICE agenda scrape at $reason" }
-              fetchLineups(toFetch.values)
+              fetchLineups(withUnreadLineups(toFetch))
               return ScrapeReport(pages, upserted, reason)
             }
           }
@@ -65,7 +66,7 @@ class DiceScraper(
         }
       }
     }
-    fetchLineups(toFetch.values)
+    fetchLineups(withUnreadLineups(toFetch))
     return ScrapeReport(pages, upserted, null)
   }
 
@@ -75,6 +76,10 @@ class DiceScraper(
     fetchLineups(refs)
     return ScrapeReport(refs.size, 0, null)
   }
+
+  private fun withUnreadLineups(changed: Map<String, ListingRef>): Collection<ListingRef> =
+    (changed.values + store.listingsNeedingLineup().filter { it.source == Source.DICE })
+      .distinctBy { it.externalId }
 
   // A request that got no response (timeout, reset) is retried once; an HTTP error is not.
   private suspend fun fetchRetryingTimeouts(url: String): FetchResult {

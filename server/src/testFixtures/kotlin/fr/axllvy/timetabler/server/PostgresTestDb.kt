@@ -13,6 +13,8 @@ object PostgresTestDb {
   private val container by lazy {
     PostgreSQLContainer("postgres:16-alpine").apply {
       withReuse(false)
+      // Every test class opens its own small pool and the run never closes them.
+      withCommand("postgres", "-c", "max_connections=1000")
       start()
     }
   }
@@ -28,7 +30,8 @@ object PostgresTestDb {
           jdbcUrl = container.jdbcUrl.replaceAfterLast('/', name)
           username = container.username
           password = container.password
-          maximumPoolSize = 4
+          maximumPoolSize = 2
+          minimumIdle = 0
         }
       )
       .also { applySchema(it) }
