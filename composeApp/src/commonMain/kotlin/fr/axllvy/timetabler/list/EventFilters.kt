@@ -25,7 +25,12 @@ data class NightGroup(val night: LocalDate, val events: List<EventDto>)
  * before tonight are dropped. The weekend is the Friday and Saturday nights of the current weekend,
  * or of the next one from Sunday to Thursday.
  */
-fun filterEvents(events: List<EventDto>, query: String, filter: QuickFilter, now: Instant): List<NightGroup> {
+fun filterEvents(
+  events: List<EventDto>,
+  query: String,
+  filter: QuickFilter,
+  now: Instant,
+): List<NightGroup> {
   val tonight = tonight(now)
   val nights = selectedNights(filter, tonight)
   val terms = normalizeText(query).split(' ').filter { it.isNotEmpty() }
@@ -39,8 +44,12 @@ fun filterEvents(events: List<EventDto>, query: String, filter: QuickFilter, now
 
 private fun selectedNights(filter: QuickFilter, tonight: LocalDate): (LocalDate) -> Boolean =
   when (filter) {
-    QuickFilter.ALL -> { night -> night >= tonight }
-    QuickFilter.TONIGHT -> { night -> night == tonight }
+    QuickFilter.ALL -> { night ->
+      night >= tonight
+    }
+    QuickFilter.TONIGHT -> { night ->
+      night == tonight
+    }
     QuickFilter.WEEKEND -> {
       val friday = weekendFriday(tonight)
       val weekend = setOf(friday, friday.plus(DatePeriod(days = 1)))
@@ -57,6 +66,7 @@ private fun weekendFriday(tonight: LocalDate): LocalDate {
 
 private fun matches(event: EventDto, terms: List<String>): Boolean {
   if (terms.isEmpty()) return true
-  val haystack = normalizeText((listOf(event.title, event.venue.name) + event.lineup).joinToString(" "))
+  val haystack =
+    normalizeText((listOf(event.title, event.venue.name) + event.lineup).joinToString(" "))
   return terms.all { it in haystack }
 }

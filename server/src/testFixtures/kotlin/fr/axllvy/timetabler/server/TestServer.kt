@@ -18,7 +18,11 @@ class TestServer : AutoCloseable {
 
   private val server: EmbeddedServer<*, *> =
     embeddedServer(Netty, port = 0) {
-        val posters = PosterCache(Files.createTempDirectory("posters"), PoliteFetcher(HttpClient(), "TimeTabler/test"))
+        val posters =
+          PosterCache(
+            Files.createTempDirectory("posters"),
+            PoliteFetcher(HttpClient(), "TimeTabler/test"),
+          )
         timeTablerModule(store, posters, staticDir = null)
       }
       .start(wait = false)

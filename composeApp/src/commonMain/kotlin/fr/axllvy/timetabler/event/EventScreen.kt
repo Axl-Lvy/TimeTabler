@@ -44,7 +44,9 @@ fun EventScreen(id: EventId, onBack: () -> Unit) {
   val store = koinInject<EventStoreLocal>()
   val event by remember(id) { store.event(id) }.collectAsState(initial = null)
   Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
-    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+    IconButton(onClick = onBack) {
+      Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+    }
     event?.let { EventDetails(it) }
   }
 }
@@ -65,9 +67,14 @@ private fun EventDetails(event: EventDto) {
     style = MaterialTheme.typography.bodyMedium,
     color = MaterialTheme.colorScheme.onSurfaceVariant,
   )
-  FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+  FlowRow(
+    horizontalArrangement = Arrangement.spacedBy(8.dp),
+    modifier = Modifier.padding(vertical = 8.dp),
+  ) {
     event.listings.forEach { listing ->
-      Button(onClick = { uriHandler.openUri(listing.url) }) { Text("Tickets on ${listing.source.label()}") }
+      Button(onClick = { uriHandler.openUri(listing.url) }) {
+        Text("Tickets on ${listing.source.label()}")
+      }
     }
   }
   Surface(
@@ -82,7 +89,11 @@ private fun EventDetails(event: EventDto) {
     )
   }
   if (event.lineup.isNotEmpty()) {
-    Text("Lineup", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+    Text(
+      "Lineup",
+      style = MaterialTheme.typography.titleSmall,
+      modifier = Modifier.padding(top = 12.dp),
+    )
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       event.lineup.forEach { artist -> AssistChip(onClick = {}, label = { Text(artist) }) }
     }

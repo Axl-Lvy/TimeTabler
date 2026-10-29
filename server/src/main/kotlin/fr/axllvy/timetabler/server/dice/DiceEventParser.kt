@@ -20,10 +20,12 @@ object DiceEventParser {
     val lineup = event["lineup"] as? JsonArray ?: return null
     return lineup.mapNotNull { entry ->
       when (entry["type"].string) {
-        "artist" -> entry["name"].string
-        "section_header" -> entry["title"].string
-        else -> null
-      }?.trim()?.takeIf { it.isNotEmpty() }
+          "artist" -> entry["name"].string
+          "section_header" -> entry["title"].string
+          else -> null
+        }
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
     }
   }
 

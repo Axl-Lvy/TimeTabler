@@ -50,26 +50,28 @@ class IndexedDbEventStore(private val databaseName: String = "timetabler") : Eve
   private var database: Database? = null
   private val cache = MutableStateFlow<List<EventDto>?>(null)
 
-  private suspend fun db(): Database =
-    openLock.withLock {
-      database
-        ?: openDatabase(databaseName, SCHEMA_VERSION) { db, _, _ ->
-            listOf(EVENTS, META).forEach { runCatching { db.deleteObjectStore(it) } }
-            db.createObjectStore(EVENTS, KeyPath("key"))
-            db.createObjectStore(META, KeyPath("key"))
-          }
-          .also { database = it }
-    }
+  private suspend fun db(): Database = openLock.withLock {
+    database
+      ?: openDatabase(databaseName, SCHEMA_VERSION) { db, _, _ ->
+          listOf(EVENTS, META).forEach { runCatching { db.deleteObjectStore(it) } }
+          db.createObjectStore(EVENTS, KeyPath("key"))
+          db.createObjectStore(META, KeyPath("key"))
+        }
+        .also { database = it }
+  }
 
   private suspend fun reload() {
     val rows = db().transaction(EVENTS) { objectStore(EVENTS).getAll() }.toList()
-    cache.value = rows.map { WIRE_JSON.decodeFromString(EventDto.serializer(), it!!.unsafeCast<JsRecord>().value) }
+    cache.value = rows.map {
+      WIRE_JSON.decodeFromString(EventDto.serializer(), it!!.unsafeCast<JsRecord>().value)
+    }
   }
 
   override fun events(): Flow<List<EventDto>> =
     cache.onStart { if (cache.value == null) reload() }.filterNotNull()
 
-  override fun event(id: EventId): Flow<EventDto?> = events().map { all -> all.firstOrNull { it.id == id } }
+  override fun event(id: EventId): Flow<EventDto?> =
+    events().map { all -> all.firstOrNull { it.id == id } }
 
   override suspend fun apply(page: EventsPage) {
     db().writeTransaction(EVENTS, META) {
@@ -89,5 +91,8 @@ class IndexedDbEventStore(private val databaseName: String = "timetabler") : Eve
   override suspend fun hasEverSynced(): Boolean = meta(LAST_REVISION) != null
 
   private suspend fun meta(key: String): String? =
-    db().transaction(META) { objectStore(META).get(Key(key.toJsString())) }?.unsafeCast<JsRecord>()?.value
+    db()
+      .transaction(META) { objectStore(META).get(Key(key.toJsString())) }
+      ?.unsafeCast<JsRecord>()
+      ?.value
 }

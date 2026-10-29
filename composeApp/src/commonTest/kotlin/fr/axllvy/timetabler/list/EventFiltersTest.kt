@@ -58,14 +58,16 @@ class EventFiltersTest {
   fun `weekend from a wednesday is the coming friday and saturday`() {
     val groups = filterEvents(all, "", QuickFilter.WEEKEND, paris("2026-10-28T12:00"))
 
-    groups.map { it.night } shouldContainExactly listOf(LocalDate(2026, 10, 30), LocalDate(2026, 10, 31))
+    groups.map { it.night } shouldContainExactly
+      listOf(LocalDate(2026, 10, 30), LocalDate(2026, 10, 31))
   }
 
   @Test
   fun `weekend on saturday night keeps friday and saturday`() {
     val groups = filterEvents(all, "", QuickFilter.WEEKEND, paris("2026-10-31T03:00"))
 
-    groups.map { it.night } shouldContainExactly listOf(LocalDate(2026, 10, 30), LocalDate(2026, 10, 31))
+    groups.map { it.night } shouldContainExactly
+      listOf(LocalDate(2026, 10, 30), LocalDate(2026, 10, 31))
   }
 
   @Test
@@ -92,8 +94,11 @@ class EventFiltersTest {
       )
     val now = paris("2026-10-30T12:00")
 
-    titles(filterEvents(events, "cuve", QuickFilter.ALL, now)) shouldContainExactly listOf("Halloween")
-    titles(filterEvents(events, "MOULIN", QuickFilter.ALL, now)) shouldContainExactly listOf("Possession")
-    titles(filterEvents(events, "possession", QuickFilter.ALL, now)) shouldContainExactly listOf("Possession")
+    titles(filterEvents(events, "cuve", QuickFilter.ALL, now)) shouldContainExactly
+      listOf("Halloween")
+    titles(filterEvents(events, "MOULIN", QuickFilter.ALL, now)) shouldContainExactly
+      listOf("Possession")
+    titles(filterEvents(events, "possession", QuickFilter.ALL, now)) shouldContainExactly
+      listOf("Possession")
   }
 }

@@ -1,10 +1,10 @@
 package fr.axllvy.timetabler.server.routes
 
-import fr.axllvy.timetabler.server.timeTablerModule
 import fr.axllvy.timetabler.server.PostgresTestDb
 import fr.axllvy.timetabler.server.events.EventStore
 import fr.axllvy.timetabler.server.offlineFetcher
 import fr.axllvy.timetabler.server.posters.PosterCache
+import fr.axllvy.timetabler.server.timeTablerModule
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.client.request.get
@@ -41,8 +41,9 @@ class StaticFrontendRoutesTest {
 
   @Test
   fun `hashed bundle files are cached for a year`() = app {
-    client.get("/composeApp.0123456789abcdef0123.js").headers[HttpHeaders.CacheControl]!! shouldContain
-      "max-age=31536000"
+    client
+      .get("/composeApp.0123456789abcdef0123.js")
+      .headers[HttpHeaders.CacheControl]!! shouldContain "max-age=31536000"
   }
 
   @Test

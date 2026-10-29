@@ -47,7 +47,9 @@ fun App(modules: List<Module> = listOf(platformModule(), appModule)) {
       Surface(Modifier.fillMaxSize()) {
         val navController = rememberNavController()
         NavHost(navController, startDestination = "events") {
-          composable("events") { EventsScreen(onOpen = { navController.navigate("event/${it.value}") }) }
+          composable("events") {
+            EventsScreen(onOpen = { navController.navigate("event/${it.value}") })
+          }
           composable("event/{id}") { entry ->
             EventScreen(
               EventId(entry.savedStateHandle.get<String>("id").orEmpty()),

@@ -20,7 +20,8 @@ fun main() {
   val store = EventStore(db)
   // DICE renders a cold event page in up to about 30 s.
   val client = HttpClient(CIO) { install(HttpTimeout) { requestTimeoutMillis = 60_000 } }
-  val fetcher = PoliteFetcher(client, "TimeTabler/$BUILD_SHA (+https://github.com/Axl-Lvy/TimeTabler)")
+  val fetcher =
+    PoliteFetcher(client, "TimeTabler/$BUILD_SHA (+https://github.com/Axl-Lvy/TimeTabler)")
   val scraper = DiceScraper(fetcher, store)
   embeddedServer(Netty, port = config.port) {
       timeTablerModule(store, PosterCache(config.posterDir, fetcher), config.staticDir)

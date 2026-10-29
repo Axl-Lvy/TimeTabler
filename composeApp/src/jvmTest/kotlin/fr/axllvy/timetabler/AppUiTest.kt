@@ -73,10 +73,14 @@ class AppUiTest {
     }
     setContent { App(testModules) }
 
-    waitUntil("Possession shown", timeoutMillis = 5_000) { onAllNodesWithText("Possession").fetchSemanticsNodes().isNotEmpty() }
+    waitUntil("Possession shown", timeoutMillis = 5_000) {
+      onAllNodesWithText("Possession").fetchSemanticsNodes().isNotEmpty()
+    }
     onNodeWithText("Possession").performClick()
 
-    waitUntil("Tickets on DICE shown", timeoutMillis = 5_000) { onAllNodesWithText("Tickets on DICE").fetchSemanticsNodes().isNotEmpty() }
+    waitUntil("Tickets on DICE shown", timeoutMillis = 5_000) {
+      onAllNodesWithText("Tickets on DICE").fetchSemanticsNodes().isNotEmpty()
+    }
     onNodeWithText("I Hate Models").assertExists()
     onNodeWithText("Narciss").assertExists()
     onNodeWithText("No set times yet", substring = true).assertExists()
@@ -86,7 +90,10 @@ class AppUiTest {
   fun `first launch offline explains that one sync is needed`() = runComposeUiTest {
     setContent { App(testModules) }
 
-    waitUntil("Connect once to load events shown", timeoutMillis = 5_000) { onAllNodesWithText("Connect once to load events").fetchSemanticsNodes().isNotEmpty() }
-    onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).assertCountEquals(0)
+    waitUntil("Connect once to load events shown", timeoutMillis = 5_000) {
+      onAllNodesWithText("Connect once to load events").fetchSemanticsNodes().isNotEmpty()
+    }
+    onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo))
+      .assertCountEquals(0)
   }
 }

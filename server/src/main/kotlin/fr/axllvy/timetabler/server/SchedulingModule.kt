@@ -26,7 +26,11 @@ private val log = Logger.withTag("Scheduling")
  * Runs the DICE agenda scrape daily at 03:00 UTC followed by archiving, refreshes events starting
  * soon every 3 hours, and scrapes once at boot when the database is empty.
  */
-fun Application.schedulingModule(scraper: DiceScraper, store: EventStore, clock: Clock = Clock.System) {
+fun Application.schedulingModule(
+  scraper: DiceScraper,
+  store: EventStore,
+  clock: Clock = Clock.System,
+) {
   val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
   monitor.subscribe(ApplicationStopping) { scope.cancel() }
   // One scrape at a time, so the boot run and a scheduled run never fetch in parallel.

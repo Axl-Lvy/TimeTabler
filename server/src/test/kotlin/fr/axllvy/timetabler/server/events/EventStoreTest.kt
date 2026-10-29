@@ -134,7 +134,8 @@ class EventStoreTest {
       seen += page.events.map { it.title }
     }
 
-    seen shouldContainExactly listOf("Night e1", "Night e2", "Night e3", "Night e4", "Night e5", "Night e1 updated")
+    seen shouldContainExactly
+      listOf("Night e1", "Night e2", "Night e3", "Night e4", "Night e5", "Night e1 updated")
     page.hasMore shouldBe false
   }
 

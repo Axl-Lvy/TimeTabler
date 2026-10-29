@@ -28,7 +28,9 @@ import fr.axllvy.timetabler.ui.headliners
 import fr.axllvy.timetabler.ui.hours
 import fr.axllvy.timetabler.wire.EventDto
 
-/** One event of the list: poster, title, venue and hours, first artists, and its timetable status. */
+/**
+ * One event of the list: poster, title, venue and hours, first artists, and its timetable status.
+ */
 @Composable
 fun EventCard(event: EventDto, onClick: () -> Unit, modifier: Modifier = Modifier) {
   Surface(
@@ -73,7 +75,10 @@ fun EventCard(event: EventDto, onClick: () -> Unit, modifier: Modifier = Modifie
 /** The event's poster from the server, or a gradient while there is none. */
 @Composable
 fun Poster(event: EventDto, modifier: Modifier = Modifier) {
-  val gradient = Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary))
+  val gradient =
+    Brush.linearGradient(
+      listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
+    )
   Box(modifier.background(gradient)) {
     event.posterPath?.let {
       AsyncImage(

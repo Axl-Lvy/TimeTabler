@@ -17,13 +17,12 @@ fun dataSource(url: String, user: String, password: String): DataSource =
   )
 
 /** Runs [block] in one transaction, committing on success and rolling back on any exception. */
-fun <T> DataSource.transaction(block: (Connection) -> T): T =
-  connection.use { connection ->
-    connection.autoCommit = false
-    try {
-      block(connection).also { connection.commit() }
-    } catch (e: Throwable) {
-      connection.rollback()
-      throw e
-    }
+fun <T> DataSource.transaction(block: (Connection) -> T): T = connection.use { connection ->
+  connection.autoCommit = false
+  try {
+    block(connection).also { connection.commit() }
+  } catch (e: Throwable) {
+    connection.rollback()
+    throw e
   }
+}

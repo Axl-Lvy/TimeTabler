@@ -16,10 +16,13 @@ import io.ktor.server.response.header
 import io.ktor.server.routing.routing
 import java.io.File
 
-/** Installs the event feed, poster and health routes, plus the web bundle when [staticDir] is set. */
+/**
+ * Installs the event feed, poster and health routes, plus the web bundle when [staticDir] is set.
+ */
 fun Application.timeTablerModule(store: EventStore, posters: PosterCache, staticDir: File?) {
   install(ContentNegotiation) { json(WIRE_JSON) }
-  // The wasm runtime needs a cross-origin isolated page; credentialless keeps same-origin posters working.
+  // The wasm runtime needs a cross-origin isolated page; credentialless keeps same-origin posters
+  // working.
   install(
     createApplicationPlugin("CrossOriginIsolation") {
       onCall { call ->

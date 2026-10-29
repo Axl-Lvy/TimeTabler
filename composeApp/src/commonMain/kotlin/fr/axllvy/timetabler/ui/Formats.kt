@@ -12,7 +12,8 @@ private fun DayOfWeek.short() = name.take(3).lowercase().replaceFirstChar { it.u
 private fun Month.short() = name.take(3).lowercase().replaceFirstChar { it.uppercase() }
 
 /** A date as "Fri 30 Oct". */
-fun shortDate(date: LocalDate): String = "${date.dayOfWeek.short()} ${date.day} ${date.month.short()}"
+fun shortDate(date: LocalDate): String =
+  "${date.dayOfWeek.short()} ${date.day} ${date.month.short()}"
 
 /** Header of a night in the list: "Tonight · Fri 30 Oct" for tonight, else "Sat 31 Oct". */
 fun nightLabel(night: LocalDate, tonight: LocalDate): String =

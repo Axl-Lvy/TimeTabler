@@ -49,7 +49,9 @@ class SyncE2eTest {
 
   @Test
   fun `a client syncs every event the server stored`(): Unit = runBlocking {
-    (1..7).forEach { server.store.upsert(listing("e$it", Instant.parse("2026-11-0${it}T22:00:00Z"))) }
+    (1..7).forEach {
+      server.store.upsert(listing("e$it", Instant.parse("2026-11-0${it}T22:00:00Z")))
+    }
     server.store.setLineup(Source.DICE, "e3", listOf("Laurent Garnier", "DJ Deep"))
     server.store.archiveBefore(LocalDate(2026, 11, 2))
     val local = RoomEventStore(buildDatabase(Room.inMemoryDatabaseBuilder<TimeTablerDatabase>()))

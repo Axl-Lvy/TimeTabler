@@ -26,7 +26,11 @@ class EventsWireTest {
             listings =
               listOf(
                 ListingDto(Source.DICE, "https://dice.fm/event/x", ListingStatus.ON_SALE),
-                ListingDto(Source.SHOTGUN, "https://shotgun.live/fr/events/x", ListingStatus.SOLD_OUT),
+                ListingDto(
+                  Source.SHOTGUN,
+                  "https://shotgun.live/fr/events/x",
+                  ListingStatus.SOLD_OUT,
+                ),
               ),
           )
         ),
@@ -44,8 +48,7 @@ class EventsWireTest {
 
   @Test
   fun `unknown fields are ignored`() {
-    val json =
-      """{"events":[],"removed":[],"next":3,"hasMore":true,"addedLater":{"x":1}}"""
+    val json = """{"events":[],"removed":[],"next":3,"hasMore":true,"addedLater":{"x":1}}"""
 
     WIRE_JSON.decodeFromString(EventsPage.serializer(), json) shouldBe
       EventsPage(emptyList(), emptyList(), Revision(3), true)
