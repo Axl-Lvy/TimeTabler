@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import fr.axllvy.timetabler.data.serverBaseUrl
+import fr.axllvy.timetabler.ui.eventBadge
 import fr.axllvy.timetabler.ui.headliners
 import fr.axllvy.timetabler.ui.hours
 import fr.axllvy.timetabler.wire.EventDto
@@ -50,7 +51,7 @@ fun EventCard(event: EventDto, onClick: () -> Unit, modifier: Modifier = Modifie
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
           )
-          Badge("lineup")
+          Badge(eventBadge(event.listings))
         }
         Text(
           "${event.venue.name} · ${hours(event.startsAt, event.endsAt)}",
