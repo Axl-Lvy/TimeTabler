@@ -1,0 +1,98 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "description": "Version holds below are explained in docs/adr/0002-toolchain-version-holds.md; read it before raising any allowedVersions bound.",
+  "timezone": "Europe/Paris",
+  "schedule": [
+    "before 6am on monday"
+  ],
+  "prConcurrentLimit": 5,
+  "semanticCommits": "enabled",
+  "semanticCommitType": "chore",
+  "semanticCommitScope": "deps",
+  "labels": [
+    "renovate"
+  ],
+  "prFooter": "- [x] Force running tests",
+  "gitIgnoredAuthors": [
+    "266536929+auto-update[bot]@users.noreply.github.com"
+  ],
+  "packageRules": [
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "semanticCommitType": "ci",
+      "groupName": "github actions"
+    },
+    {
+      "groupName": "kotlin",
+      "matchPackageNames": [
+        "org.jetbrains.kotlin:*",
+        "org.jetbrains.kotlin.*",
+        "com.google.devtools.ksp*"
+      ]
+    },
+    {
+      "groupName": "compose",
+      "matchPackageNames": [
+        "org.jetbrains.compose*",
+        "org.jetbrains.androidx.*"
+      ]
+    },
+    {
+      "groupName": "androidx",
+      "matchPackageNames": [
+        "androidx.*",
+        "com.android.*"
+      ]
+    },
+    {
+      "groupName": "ktor",
+      "matchPackageNames": [
+        "io.ktor*"
+      ]
+    },
+    {
+      "matchManagers": [
+        "gradle",
+        "gradle-wrapper"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "gradle non-major",
+      "automerge": true,
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "pin",
+        "digest"
+      ],
+      "automerge": true,
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "matchPackageNames": [
+        "org.jetbrains.kotlinx:kotlinx-datetime"
+      ],
+      "allowedVersions": "!/compat/"
+    },
+    {
+      "description": "Gradle 9.7.x exhausts the daemon heap while storing the configuration cache entry for the Kotlin/Wasm browser tasks; see docs/adr/0002-toolchain-version-holds.md.",
+      "matchManagers": [
+        "gradle-wrapper"
+      ],
+      "allowedVersions": "<9.7.0"
+    }
+  ]
+}
