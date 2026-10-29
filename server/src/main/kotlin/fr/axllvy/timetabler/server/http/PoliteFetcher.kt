@@ -3,7 +3,9 @@ package fr.axllvy.timetabler.server.http
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.readRawBytes
 import io.ktor.http.HttpHeaders
 import io.ktor.http.Url
 import io.ktor.http.isSuccess
@@ -41,19 +43,32 @@ class PoliteFetcher(
 
   private val hosts = ConcurrentHashMap<String, HostSlot>()
 
-  /** Fetches [url], suspending until the host's interval has passed. */
-  suspend fun get(url: String): FetchResult {
+  /** Fetches [url] as text, suspending until the host's interval has passed. */
+  suspend fun get(url: String): FetchResult =
+    fetch(url, onFailure = { status, reason -> FetchResult.Failed(status, reason) }) {
+      FetchResult.Ok(it.bodyAsText())
+    }
+
+  /** Fetches [url] as bytes, or null when the request fails. */
+  suspend fun getBytes(url: String): ByteArray? =
+    fetch(url, onFailure = { _, _ -> null }) { it.readRawBytes() }
+
+  private suspend fun <T> fetch(
+    url: String,
+    onFailure: (status: Int?, reason: String) -> T,
+    read: suspend (HttpResponse) -> T,
+  ): T {
     val slot = hosts.computeIfAbsent(Url(url).host) { HostSlot() }
     return slot.mutex.withLock {
       slot.last?.let { delay(minInterval - it.elapsedNow()) }
       try {
         val response = client.get(url) { header(HttpHeaders.UserAgent, userAgent) }
-        if (response.status.isSuccess()) FetchResult.Ok(response.bodyAsText())
-        else FetchResult.Failed(response.status.value, response.status.description)
+        if (response.status.isSuccess()) read(response)
+        else onFailure(response.status.value, response.status.description)
       } catch (e: CancellationException) {
         throw e
       } catch (e: Exception) {
-        FetchResult.Failed(null, e.message ?: e::class.simpleName.orEmpty())
+        onFailure(null, e.message ?: e::class.simpleName.orEmpty())
       } finally {
         slot.last = timeSource.markNow()
       }
