@@ -4,6 +4,10 @@ on:
   pull_request:
     types: [ opened, synchronize, reopened, edited ]
 
+# The check labels the PR with its commit type, and new repos default to a read-only token.
+permissions:
+  pull-requests: write
+
 jobs:
   validate-pr-title:
     runs-on: ubuntu-latest
