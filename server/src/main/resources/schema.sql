@@ -44,3 +44,12 @@ CREATE INDEX IF NOT EXISTS listing_event_idx ON listing (event_id);
 
 -- Set when the listing's lineup was last read from its event page; null means never.
 ALTER TABLE listing ADD COLUMN IF NOT EXISTS lineup_checked_at timestamptz;
+
+-- One row per server-wide setting. The epoch names this database: a restore or a reseed gets a new
+-- one (see hosts/minipc/timetabler/README.md in home-lab), which tells clients to start over.
+CREATE TABLE IF NOT EXISTS server_meta (
+  key text PRIMARY KEY,
+  value text NOT NULL
+);
+
+INSERT INTO server_meta (key, value) VALUES ('epoch', gen_random_uuid()::text) ON CONFLICT DO NOTHING;

@@ -31,6 +31,7 @@ class RoomEventStore(database: TimeTablerDatabase) : EventStoreLocal {
         },
       removed = page.removed.map { it.value },
       revision = page.next.value,
+      epoch = page.epoch,
     )
   }
 
@@ -38,6 +39,10 @@ class RoomEventStore(database: TimeTablerDatabase) : EventStoreLocal {
     dao.meta(EventDao.LAST_REVISION)?.toLong()?.let(::Revision) ?: Revision.ZERO
 
   override suspend fun hasEverSynced(): Boolean = dao.meta(EventDao.LAST_REVISION) != null
+
+  override suspend fun epoch(): String? = dao.meta(EventDao.EPOCH)
+
+  override suspend fun clear() = dao.clearAll()
 
   private fun EventEntity.toDto(): EventDto =
     WIRE_JSON.decodeFromString(EventDto.serializer(), json)

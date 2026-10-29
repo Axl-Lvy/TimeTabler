@@ -176,6 +176,16 @@ class EventStoreTest {
   }
 
   @Test
+  fun `every database has its own stable epoch`() {
+    val first = store.page(Revision.ZERO, 10).epoch
+    val other = EventStore(PostgresTestDb.freshDataSource(), clock).page(Revision.ZERO, 10).epoch
+
+    first.isNotBlank() shouldBe true
+    store.page(Revision.ZERO, 10).epoch shouldBe first
+    (other == first) shouldBe false
+  }
+
+  @Test
   fun `knows the poster url of an event`() {
     val id = store.upsert(listing("a")).id
 

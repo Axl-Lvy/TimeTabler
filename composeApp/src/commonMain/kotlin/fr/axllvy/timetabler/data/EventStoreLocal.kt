@@ -23,4 +23,10 @@ interface EventStoreLocal {
 
   /** Whether a page has ever been applied. */
   suspend fun hasEverSynced(): Boolean
+
+  /** Epoch of the server database the stored events came from, null before the first page. */
+  suspend fun epoch(): String?
+
+  /** Deletes every stored event and setting, as if the app was just installed. */
+  suspend fun clear()
 }
