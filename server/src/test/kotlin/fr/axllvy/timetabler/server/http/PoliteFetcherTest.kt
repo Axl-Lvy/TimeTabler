@@ -9,6 +9,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.respondError
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
 import java.io.IOException
 import kotlin.test.Test
 import kotlinx.coroutines.test.TestScope
@@ -69,6 +70,23 @@ class PoliteFetcherTest {
 
     result shouldBe FetchResult.Ok("body of dice.fm")
     recorded.single().userAgent shouldBe "TimeTabler/test"
+  }
+
+  @Test
+  fun `follows a redirect as a separately spaced request`() = runTest {
+    val times = mutableListOf<Long>()
+    val engine = MockEngine { request ->
+      times += testScheduler.currentTime
+      if (request.url.encodedPath == "/event/1")
+        respond("", HttpStatusCode.PermanentRedirect, headersOf(HttpHeaders.Location, "/event/slug-1"))
+      else respond("page ${request.url.encodedPath}")
+    }
+    val fetcher = PoliteFetcher(HttpClient(engine), "TimeTabler/test", timeSource = testScheduler.timeSource)
+
+    val result = fetcher.get("https://dice.fm/event/1")
+
+    result shouldBe FetchResult.Ok("page /event/slug-1")
+    times[1] - times[0] shouldBeGreaterThanOrEqual 2_000
   }
 
   @Test
