@@ -30,6 +30,9 @@ kotlin {
       api(libs.kotlinx.serialization.json)
     }
 
+    // kotlinx-datetime reads time zones from js-joda in the browser.
+    wasmJsMain.dependencies { implementation(npm("@js-joda/timezone", "2.22.0")) }
+
     commonTest.dependencies {
       implementation(libs.kotlin.test)
       implementation(libs.kotest.assertions)
