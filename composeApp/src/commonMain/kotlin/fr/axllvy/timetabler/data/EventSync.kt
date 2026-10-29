@@ -48,7 +48,8 @@ class EventSync(private val api: EventsApi, private val store: EventStoreLocal) 
       } catch (e: CancellationException) {
         _state.value = SyncState.IDLE
         throw e
-      } catch (e: Exception) {
+      } catch (e: Throwable) {
+        // Throwable, not Exception: a failed browser fetch on wasm is a JsException.
         log.w { "Sync failed: ${e.message}" }
         _state.value = SyncState.OFFLINE
         SyncOutcome.Offline(e.message ?: e::class.simpleName.orEmpty())
