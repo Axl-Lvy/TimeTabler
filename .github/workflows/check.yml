@@ -1,0 +1,223 @@
+name: Check code
+
+on:
+  pull_request:
+    # `edited` re-resolves the tier when the title or description changes.
+    types: [opened, synchronize, reopened, edited]
+  schedule:
+    - cron: 0 0 * * *
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Tiers (docs/adr/0001-three-tier-ci-checks.md):
+  #   noop  -> no code or build file touched
+  #   cheap -> common, JVM or server code only: format, JVM tests, multiplatform compile
+  #   full  -> platform code or build config: adds wasm tests, Android build, iOS compile
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      tier: ${{ steps.tier.outputs.tier }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compute override
+        id: override
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            echo "force=full" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            if printf '%s' "$PR_TITLE" | grep -qi '\[skip-tests\]'; then
+              echo "force=noop" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if printf '%s' "$PR_BODY" | grep -qE '\- \[x\] Force running tests'; then
+              echo "force=full" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "force=" >> "$GITHUB_OUTPUT"
+
+      - uses: dorny/paths-filter@v4
+        id: filter
+        if: steps.override.outputs.force == ''
+        with:
+          filters: |
+            code:
+              - '**/*.kt'
+              - '**/*.kts'
+              - '**/*.toml'
+              - '**/*.xml'
+              - '**/*.properties'
+              - '**/*.sql'
+              - '**/*.html'
+              - '**/*.js'
+              - 'server/src/test/resources/**'
+              - 'gradle/wrapper/**'
+              - '.github/workflows/check.yml'
+              - 'Dockerfile'
+              - '.dockerignore'
+            platform:
+              - 'androidApp/**'
+              - 'composeApp/src/androidMain/**'
+              - 'composeApp/src/iosMain/**'
+              - 'composeApp/src/wasmJsMain/**'
+              - 'composeApp/src/nonJsMain/**'
+              - 'shared/src/wasmJsMain/**'
+              - '**/AndroidManifest.xml'
+              - '**/*.gradle.kts'
+              - 'gradle/libs.versions.toml'
+              - 'gradle/wrapper/**'
+              - '.github/workflows/check.yml'
+
+      - name: Resolve tier
+        id: tier
+        env:
+          FORCE: ${{ steps.override.outputs.force }}
+          CODE: ${{ steps.filter.outputs.code }}
+          PLATFORM: ${{ steps.filter.outputs.platform }}
+        run: |
+          if [ -n "$FORCE" ]; then
+            echo "tier=$FORCE" >> "$GITHUB_OUTPUT"
+          elif [ "$PLATFORM" = "true" ]; then
+            echo "tier=full" >> "$GITHUB_OUTPUT"
+          elif [ "$CODE" = "true" ]; then
+            echo "tier=cheap" >> "$GITHUB_OUTPUT"
+          else
+            echo "tier=noop" >> "$GITHUB_OUTPUT"
+          fi
+
+  format-check:
+    needs: detect
+    if: needs.detect.outputs.tier != 'noop'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: true
+      - run: ./gradlew ktfmtCheck
+
+  jvm-tests:
+    needs: detect
+    if: needs.detect.outputs.tier != 'noop'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+      - run: ./gradlew :shared:jvmTest :server:test :e2e:test :composeApp:jvmTest
+      - name: Upload test results
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: jvm-test-results
+          path: '**/build/test-results/**/*.xml'
+          retention-days: 7
+
+  compile-multiplat:
+    needs: detect
+    if: needs.detect.outputs.tier != 'noop'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: true
+      - run: ./gradlew :composeApp:compileAndroidMain :composeApp:compileKotlinWasmJs
+
+  wasm-tests:
+    needs: detect
+    if: needs.detect.outputs.tier == 'full'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: true
+      - run: ./gradlew :shared:wasmJsBrowserTest :composeApp:wasmJsTest
+
+  android-build:
+    needs: detect
+    if: needs.detect.outputs.tier == 'full'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: true
+      - run: ./gradlew :androidApp:assembleDebug
+
+  ios-compile:
+    needs: detect
+    if: needs.detect.outputs.tier == 'full'
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: true
+      - run: ./gradlew :composeApp:compileKotlinIosSimulatorArm64
+
+  check-status:
+    name: All checks passed
+    runs-on: ubuntu-latest
+    needs: [detect, format-check, jvm-tests, compile-multiplat, wasm-tests, android-build, ios-compile]
+    if: always()
+    steps:
+      - name: Check job results
+        env:
+          TIER: ${{ needs.detect.outputs.tier }}
+          FORMAT: ${{ needs.format-check.result }}
+          JVM: ${{ needs.jvm-tests.result }}
+          MULTIPLAT: ${{ needs.compile-multiplat.result }}
+          WASM: ${{ needs.wasm-tests.result }}
+          ANDROID: ${{ needs.android-build.result }}
+          IOS: ${{ needs.ios-compile.result }}
+        run: |
+          fail() { echo "$1 failed (result=$2)"; exit 1; }
+          echo "Resolved tier: $TIER"
+          [ "$TIER" = "noop" ] && exit 0
+          [ "$FORMAT" = "success" ] || fail format-check "$FORMAT"
+          [ "$JVM" = "success" ] || fail jvm-tests "$JVM"
+          [ "$MULTIPLAT" = "success" ] || fail compile-multiplat "$MULTIPLAT"
+          if [ "$TIER" = "full" ]; then
+            [ "$WASM" = "success" ] || fail wasm-tests "$WASM"
+            [ "$ANDROID" = "success" ] || fail android-build "$ANDROID"
+            [ "$IOS" = "success" ] || fail ios-compile "$IOS"
+          fi
+          echo "All checks passed (tier=$TIER)"
