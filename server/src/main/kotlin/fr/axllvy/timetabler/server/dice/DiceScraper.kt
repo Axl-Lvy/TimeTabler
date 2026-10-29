@@ -16,6 +16,7 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
 private val RETRY_PAUSE = 10.seconds
+private const val HTTP_TOO_MANY_REQUESTS = 429
 
 /** Summary of one scrape run; [failed] says why the run stopped early, null when it completed. */
 data class ScrapeReport(val pages: Int, val upserted: Int, val failed: String?)
@@ -32,8 +33,8 @@ class DiceScraper(
 
   /**
    * Walks every day from today to [horizonDays] ahead in each music category, then fetches the
-   * lineup of every new or changed listing and of every listing whose lineup was never read. Stops
-   * at the first failed agenda page.
+   * lineup of every new or changed listing and of every listing whose lineup was never read. A
+   * failed agenda page stops the run without fetching lineups; a throttled lineup stops the rest.
    */
   suspend fun scrapeAgenda(): ScrapeReport {
     val today = clock.now().toLocalDateTime(PARIS).date
@@ -47,15 +48,11 @@ class DiceScraper(
         val body =
           when (val result = fetchRetryingTimeouts(url)) {
             is FetchResult.Ok -> result.body
-            is FetchResult.Failed -> {
-              val reason = "$url: ${result.status ?: "no response"} ${result.reason}"
-              log.w { "Stopping DICE agenda scrape at $reason" }
-              fetchLineups(withUnreadLineups(toFetch))
-              return ScrapeReport(pages, upserted, reason)
-            }
+            is FetchResult.Failed ->
+              return stopped(pages, upserted, "$url: ${result.status ?: "no response"} ${result.reason}")
           }
         pages++
-        val page = DiceBrowseParser.parse(body)
+        val page = DiceBrowseParser.parse(body) ?: return stopped(pages, upserted, "$url: no page data")
         if (page.overflow) log.w { "DICE $category on $day lists more events than one page shows" }
         for (listing in page.listings) {
           val result = store.upsert(listing)
@@ -75,6 +72,12 @@ class DiceScraper(
     val refs = store.listingsStartingWithin(48.hours).filter { it.source == Source.DICE }
     fetchLineups(refs)
     return ScrapeReport(refs.size, 0, null)
+  }
+
+  // Lineups are skipped too: a failing agenda usually means DICE wants us to back off.
+  private fun stopped(pages: Int, upserted: Int, reason: String): ScrapeReport {
+    log.w { "Stopping DICE agenda scrape at $reason" }
+    return ScrapeReport(pages, upserted, reason)
   }
 
   private fun withUnreadLineups(changed: Map<String, ListingRef>): Collection<ListingRef> =
@@ -97,8 +100,10 @@ class DiceScraper(
           DiceEventParser.performers(result.body)?.let {
             store.setLineup(ref.source, ref.externalId, it)
           } ?: log.w { "No lineup data on ${ref.url}" }
-        is FetchResult.Failed ->
+        is FetchResult.Failed -> {
           log.w { "Could not fetch ${ref.url}: ${result.status} ${result.reason}" }
+          if (result.status == HTTP_TOO_MANY_REQUESTS) return
+        }
       }
     }
   }

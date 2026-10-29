@@ -83,8 +83,30 @@ class DiceScraperTest {
 
     report.failed!! shouldContain "429"
     storedTitles().size shouldBe 5
+    requested.filter { "/event/" in it }.shouldBeEmpty()
     store.page(Revision.ZERO, 1000).removed.shouldBeEmpty()
     requested.none { it == DiceBrowseParser.dayUrl("gig", LocalDate(2026, 11, 7)) } shouldBe true
+  }
+
+  @Test
+  fun `a page without page data stops the run`() = runTest {
+    val party = DiceBrowseParser.dayUrl("party", LocalDate(2026, 11, 7))
+
+    val report =
+      scraper { if (it.url.toString() == party) respond("<html>Checking your browser</html>") else null }
+        .scrapeAgenda()
+
+    report.failed!! shouldContain "no page data"
+  }
+
+  @Test
+  fun `a throttled lineup stops further lineup requests`() = runTest {
+    val report =
+      scraper { if ("/event/" in it.url.toString()) respondError(HttpStatusCode.TooManyRequests) else null }
+        .scrapeAgenda()
+
+    report.failed.shouldBeNull()
+    requested.count { "/event/" in it } shouldBe 1
   }
 
   @Test
