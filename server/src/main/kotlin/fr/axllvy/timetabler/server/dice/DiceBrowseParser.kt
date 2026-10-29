@@ -24,13 +24,21 @@ object DiceBrowseParser {
 
   private val log = Logger.withTag("DiceBrowseParser")
 
-  /** Parses the events embedded in a browse page; events missing required fields are skipped. */
-  fun parse(html: String): DiceBrowsePage {
-    val props = Jsoup.parse(html).nextData()["props"]["pageProps"]
+  /**
+   * Parses the events embedded in a browse page; events missing or garbling required fields are
+   * skipped. Null when the page carries no page data, such as a bot challenge.
+   */
+  fun parse(html: String): DiceBrowsePage? {
+    val props = Jsoup.parse(html).nextData()["props"]["pageProps"] ?: return null
     val events = props["events"] as? JsonArray ?: JsonArray(emptyList())
     val cursor = props["nextCursor"]
     return DiceBrowsePage(
-      listings = events.mapNotNull { event -> toListing(event) },
+      listings =
+        events.mapNotNull { event ->
+          runCatching { toListing(event) }
+            .onFailure { log.w { "Skipping DICE event ${event["id"].string}: ${it.message}" } }
+            .getOrNull()
+        },
       overflow = cursor != null && cursor != JsonNull,
     )
   }

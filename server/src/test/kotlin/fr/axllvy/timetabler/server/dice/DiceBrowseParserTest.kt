@@ -5,6 +5,7 @@ import fr.axllvy.timetabler.wire.ListingStatus
 import fr.axllvy.timetabler.wire.Source
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotContain
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 import kotlin.time.Instant
@@ -14,7 +15,7 @@ class DiceBrowseParserTest {
 
   @Test
   fun `parses every event of a day page`() {
-    val page = DiceBrowseParser.parse(fixture("dice/day-page.html"))
+    val page = DiceBrowseParser.parse(fixture("dice/day-page.html"))!!
 
     page.listings shouldHaveSize 5
     page.overflow shouldBe false
@@ -23,7 +24,7 @@ class DiceBrowseParserTest {
 
   @Test
   fun `maps the fields of a listing`() {
-    val first = DiceBrowseParser.parse(fixture("dice/day-page.html")).listings.first()
+    val first = DiceBrowseParser.parse(fixture("dice/day-page.html"))!!.listings.first()
 
     first.externalId shouldBe "6ad5f2180594730001f32ed4"
     first.title shouldBe "Kouss Kouss - Twerkistan + DJ set"
@@ -40,15 +41,31 @@ class DiceBrowseParserTest {
 
   @Test
   fun `skips an event without dates`() {
-    val page = DiceBrowseParser.parse(fixture("dice/day-page-bad-event.html"))
+    val page = DiceBrowseParser.parse(fixture("dice/day-page-bad-event.html"))!!
 
     page.listings shouldHaveSize 4
     page.listings.map { it.externalId } shouldNotContain "6ae30f3eff6a4e000149d810"
   }
 
   @Test
+  fun `skips an event with a malformed date`() {
+    val html =
+      fixture("dice/day-page.html")
+        .replace("\"event_start_date\":\"2026-11-07T20:00:00+01:00\"", "\"event_start_date\":\"TBA\"")
+
+    val page = DiceBrowseParser.parse(html)!!
+
+    page.listings shouldHaveSize 4
+  }
+
+  @Test
+  fun `a page without page data is not a page`() {
+    DiceBrowseParser.parse("<html><body>Checking your browser</body></html>").shouldBeNull()
+  }
+
+  @Test
   fun `flags a page with more events than it shows`() {
-    val page = DiceBrowseParser.parse(fixture("dice/day-page-overflow.html"))
+    val page = DiceBrowseParser.parse(fixture("dice/day-page-overflow.html"))!!
 
     page.overflow shouldBe true
     page.listings shouldHaveSize 22
@@ -56,7 +73,7 @@ class DiceBrowseParserTest {
 
   @Test
   fun `maps sold out status`() {
-    val page = DiceBrowseParser.parse(fixture("dice/day-page-overflow.html"))
+    val page = DiceBrowseParser.parse(fixture("dice/day-page-overflow.html"))!!
 
     page.listings.count { it.status == ListingStatus.SOLD_OUT } shouldBe 2
   }
