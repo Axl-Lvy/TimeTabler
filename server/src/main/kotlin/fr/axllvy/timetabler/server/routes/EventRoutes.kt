@@ -11,7 +11,10 @@ import io.ktor.server.routing.get
 private const val DEFAULT_LIMIT = 500
 private const val MAX_LIMIT = 2000
 
-/** The page size from a `limit` parameter: [default] when absent, clamped to [max], null when invalid. */
+/**
+ * The page size from a `limit` parameter: [default] when absent, clamped to [max], null when
+ * invalid.
+ */
 fun parsePageLimit(raw: String?, default: Int, max: Int): Int? {
   if (raw == null) return default
   val limit = raw.toIntOrNull()?.takeIf { it > 0 } ?: return null
@@ -25,7 +28,10 @@ fun Route.eventRoutes(store: EventStore) {
     val since = params["since"]?.let { it.toLongOrNull() ?: -1 } ?: 0
     val limit = parsePageLimit(params["limit"], DEFAULT_LIMIT, MAX_LIMIT)
     if (since < 0 || limit == null) {
-      call.respondText("since must be a revision and limit a positive integer", status = HttpStatusCode.BadRequest)
+      call.respondText(
+        "since must be a revision and limit a positive integer",
+        status = HttpStatusCode.BadRequest,
+      )
       return@get
     }
     call.respond(store.page(Revision(since), limit))

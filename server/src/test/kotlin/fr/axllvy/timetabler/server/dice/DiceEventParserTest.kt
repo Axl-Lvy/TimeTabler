@@ -22,7 +22,10 @@ class DiceEventParserTest {
   fun `falls back to JSON-LD performers without page data`() {
     val html =
       fixture("dice/event-with-lineup.html")
-        .replace(Regex("""<script id="__NEXT_DATA__"[^>]*>.*?</script>""", RegexOption.DOT_MATCHES_ALL), "")
+        .replace(
+          Regex("""<script id="__NEXT_DATA__"[^>]*>.*?</script>""", RegexOption.DOT_MATCHES_ALL),
+          "",
+        )
 
     DiceEventParser.performers(html) shouldBe listOf("Baron Von Trax")
   }

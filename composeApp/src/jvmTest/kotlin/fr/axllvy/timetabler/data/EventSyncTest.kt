@@ -47,7 +47,8 @@ class EventSyncTest {
     var served = 0
     val engine = MockEngine { request ->
       sinces += request.url.parameters["since"]
-      val page = pages.getOrElse(served++) { EventsPage(emptyList(), emptyList(), pages.last().next, false) }
+      val page =
+        pages.getOrElse(served++) { EventsPage(emptyList(), emptyList(), pages.last().next, false) }
       respond(
         WIRE_JSON.encodeToString(EventsPage.serializer(), page),
         headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
@@ -78,15 +79,21 @@ class EventSyncTest {
   fun `a later sync starts from the stored revision`() = runTest {
     store.apply(EventsPage(listOf(event("a", 7)), emptyList(), Revision(7), hasMore = false))
 
-    EventSync(apiServing(EventsPage(emptyList(), emptyList(), Revision(7), false)), store).syncOnce()
+    EventSync(apiServing(EventsPage(emptyList(), emptyList(), Revision(7), false)), store)
+      .syncOnce()
 
     sinces shouldContainExactly listOf("7")
   }
 
   @Test
   fun `a failure that is not an exception is reported as offline`() = runTest {
-    // On wasm a failed browser fetch surfaces as a JsException, which is a Throwable, not an Exception.
-    val api = EventsApi(HttpClient(MockEngine { throw object : Throwable("Fail to fetch") {} }), "https://tt.example")
+    // On wasm a failed browser fetch surfaces as a JsException, which is a Throwable, not an
+    // Exception.
+    val api =
+      EventsApi(
+        HttpClient(MockEngine { throw object : Throwable("Fail to fetch") {} }),
+        "https://tt.example",
+      )
     val sync = EventSync(api, store)
 
     sync.syncOnce().shouldBeInstanceOf<SyncOutcome.Offline>()
@@ -97,7 +104,8 @@ class EventSyncTest {
   @Test
   fun `no network keeps the stored events`() = runTest {
     store.apply(EventsPage(listOf(event("a", 1)), emptyList(), Revision(1), hasMore = false))
-    val offline = EventsApi(HttpClient(MockEngine { throw IOException("no route") }), "https://tt.example")
+    val offline =
+      EventsApi(HttpClient(MockEngine { throw IOException("no route") }), "https://tt.example")
     val sync = EventSync(offline, store)
 
     val outcome = sync.syncOnce()

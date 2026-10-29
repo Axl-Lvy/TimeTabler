@@ -24,11 +24,19 @@ class PoliteFetcherTest {
   ): PoliteFetcher {
     val engine = MockEngine { request ->
       recorded +=
-        Recorded(request.url.host, testScheduler.currentTime, request.headers[HttpHeaders.UserAgent])
+        Recorded(
+          request.url.host,
+          testScheduler.currentTime,
+          request.headers[HttpHeaders.UserAgent],
+        )
       if (status == HttpStatusCode.OK) respond("body of ${request.url.host}")
       else respondError(status)
     }
-    return PoliteFetcher(HttpClient(engine), "TimeTabler/test", timeSource = testScheduler.timeSource)
+    return PoliteFetcher(
+      HttpClient(engine),
+      "TimeTabler/test",
+      timeSource = testScheduler.timeSource,
+    )
   }
 
   @Test
@@ -73,7 +81,8 @@ class PoliteFetcherTest {
   @Test
   fun `reports a network error as failed without status`() = runTest {
     val engine = MockEngine { throw IOException("connection reset") }
-    val fetcher = PoliteFetcher(HttpClient(engine), "TimeTabler/test", timeSource = testScheduler.timeSource)
+    val fetcher =
+      PoliteFetcher(HttpClient(engine), "TimeTabler/test", timeSource = testScheduler.timeSource)
 
     val result = fetcher.get("https://dice.fm/a")
 

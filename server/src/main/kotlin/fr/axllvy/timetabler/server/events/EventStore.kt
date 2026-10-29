@@ -29,105 +29,112 @@ import kotlinx.datetime.toKotlinLocalDate
 /** Identity of one source listing, enough to fetch and update it. */
 data class ListingRef(val source: Source, val externalId: String, val url: String)
 
-/** Result of [EventStore.upsert]: the event the listing belongs to, and whether anything changed. */
+/**
+ * Result of [EventStore.upsert]: the event the listing belongs to, and whether anything changed.
+ */
 data class Upserted(val id: EventId, val changed: Boolean)
 
 /** Postgres store of events and their listings; every change gives the event a new revision. */
 class EventStore(private val dataSource: DataSource, private val clock: Clock = Clock.System) {
 
-  /** Inserts or updates [listing] and its event. A non-empty lineup on [listing] replaces the event's. */
-  fun upsert(listing: ScrapedListing): Upserted =
-    dataSource.transaction { c ->
-      c.lockWrites()
-      val venueId = c.upsertVenue(listing.venueName, listing.venueAddress)
-      val hash = listing.contentHash()
-      val existing =
-        c.query(
-            "SELECT event_id, content_hash FROM listing WHERE source = ? AND external_id = ?",
-            listing.source.name,
-            listing.externalId,
-          ) {
-            it.getObject(1, UUID::class.java) to it.getString(2)
-          }
-          .firstOrNull()
-      when {
-        existing == null -> {
-          val eventId = UUID.randomUUID()
-          c.update(
-            """INSERT INTO event (id, revision, night_date, starts_at, ends_at, venue_id, title, poster_url, lineup)
+  /**
+   * Inserts or updates [listing] and its event. A non-empty lineup on [listing] replaces the
+   * event's.
+   */
+  fun upsert(listing: ScrapedListing): Upserted = dataSource.transaction { c ->
+    c.lockWrites()
+    val venueId = c.upsertVenue(listing.venueName, listing.venueAddress)
+    val hash = listing.contentHash()
+    val existing =
+      c.query(
+          "SELECT event_id, content_hash FROM listing WHERE source = ? AND external_id = ?",
+          listing.source.name,
+          listing.externalId,
+        ) {
+          it.getObject(1, UUID::class.java) to it.getString(2)
+        }
+        .firstOrNull()
+    when {
+      existing == null -> {
+        val eventId = UUID.randomUUID()
+        c.update(
+          """INSERT INTO event (id, revision, night_date, starts_at, ends_at, venue_id, title, poster_url, lineup)
                VALUES (?, nextval('event_revision_seq'), ?, ?, ?, ?, ?, ?, ?)""",
-            eventId,
-            nightDateOf(listing.startsAt).toJavaLocalDate(),
-            listing.startsAt.ts(),
-            listing.endsAt?.ts(),
-            venueId,
-            listing.title,
-            listing.posterUrl,
-            c.createArrayOf("text", listing.lineup.toTypedArray()),
-          )
-          c.update(
-            """INSERT INTO listing (id, event_id, source, external_id, url, raw_title, starts_at, ends_at, status,
+          eventId,
+          nightDateOf(listing.startsAt).toJavaLocalDate(),
+          listing.startsAt.ts(),
+          listing.endsAt?.ts(),
+          venueId,
+          listing.title,
+          listing.posterUrl,
+          c.createArrayOf("text", listing.lineup.toTypedArray()),
+        )
+        c.update(
+          """INSERT INTO listing (id, event_id, source, external_id, url, raw_title, starts_at, ends_at, status,
                  poster_url, lineup, content_hash, last_seen_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            UUID.randomUUID(),
-            eventId,
-            listing.source.name,
-            listing.externalId,
-            listing.url,
-            listing.title,
-            listing.startsAt.ts(),
-            listing.endsAt?.ts(),
-            listing.status.name,
-            listing.posterUrl,
-            c.createArrayOf("text", listing.lineup.toTypedArray()),
-            hash,
-            clock.now().ts(),
-          )
-          Upserted(EventId(eventId.toString()), changed = true)
-        }
-        existing.second == hash -> {
-          c.update(
-            "UPDATE listing SET last_seen_at = ? WHERE source = ? AND external_id = ?",
-            clock.now().ts(),
-            listing.source.name,
-            listing.externalId,
-          )
-          Upserted(EventId(existing.first.toString()), changed = false)
-        }
-        else -> {
-          val eventId = existing.first
-          c.update(
-            """UPDATE listing SET url = ?, raw_title = ?, starts_at = ?, ends_at = ?, status = ?, poster_url = ?,
+          UUID.randomUUID(),
+          eventId,
+          listing.source.name,
+          listing.externalId,
+          listing.url,
+          listing.title,
+          listing.startsAt.ts(),
+          listing.endsAt?.ts(),
+          listing.status.name,
+          listing.posterUrl,
+          c.createArrayOf("text", listing.lineup.toTypedArray()),
+          hash,
+          clock.now().ts(),
+        )
+        Upserted(EventId(eventId.toString()), changed = true)
+      }
+      existing.second == hash -> {
+        c.update(
+          "UPDATE listing SET last_seen_at = ? WHERE source = ? AND external_id = ?",
+          clock.now().ts(),
+          listing.source.name,
+          listing.externalId,
+        )
+        Upserted(EventId(existing.first.toString()), changed = false)
+      }
+      else -> {
+        val eventId = existing.first
+        c.update(
+          """UPDATE listing SET url = ?, raw_title = ?, starts_at = ?, ends_at = ?, status = ?, poster_url = ?,
                  content_hash = ?, last_seen_at = ? WHERE source = ? AND external_id = ?""",
-            listing.url,
-            listing.title,
-            listing.startsAt.ts(),
-            listing.endsAt?.ts(),
-            listing.status.name,
-            listing.posterUrl,
-            hash,
-            clock.now().ts(),
-            listing.source.name,
-            listing.externalId,
-          )
-          c.update(
-            """UPDATE event SET revision = nextval('event_revision_seq'), night_date = ?, starts_at = ?, ends_at = ?,
+          listing.url,
+          listing.title,
+          listing.startsAt.ts(),
+          listing.endsAt?.ts(),
+          listing.status.name,
+          listing.posterUrl,
+          hash,
+          clock.now().ts(),
+          listing.source.name,
+          listing.externalId,
+        )
+        c.update(
+          """UPDATE event SET revision = nextval('event_revision_seq'), night_date = ?, starts_at = ?, ends_at = ?,
                  venue_id = ?, title = ?, poster_url = ?, archived = false WHERE id = ?""",
-            nightDateOf(listing.startsAt).toJavaLocalDate(),
-            listing.startsAt.ts(),
-            listing.endsAt?.ts(),
-            venueId,
-            listing.title,
-            listing.posterUrl,
-            eventId,
-          )
-          if (listing.lineup.isNotEmpty()) c.writeLineup(listing.source, listing.externalId, listing.lineup)
-          Upserted(EventId(eventId.toString()), changed = true)
-        }
+          nightDateOf(listing.startsAt).toJavaLocalDate(),
+          listing.startsAt.ts(),
+          listing.endsAt?.ts(),
+          venueId,
+          listing.title,
+          listing.posterUrl,
+          eventId,
+        )
+        if (listing.lineup.isNotEmpty())
+          c.writeLineup(listing.source, listing.externalId, listing.lineup)
+        Upserted(EventId(eventId.toString()), changed = true)
       }
     }
+  }
 
-  /** Sets the lineup of one listing, giving its event a new revision only when the lineup differs. */
+  /**
+   * Sets the lineup of one listing, giving its event a new revision only when the lineup differs.
+   */
   fun setLineup(source: Source, externalId: String, lineup: List<String>) {
     dataSource.transaction { c ->
       c.lockWrites()
@@ -136,65 +143,63 @@ class EventStore(private val dataSource: DataSource, private val clock: Clock = 
   }
 
   /** Events changed after [since], in revision order, at most [limit] of them. */
-  fun page(since: Revision, limit: Int): EventsPage =
-    dataSource.transaction { c ->
-      val rows =
-        c.query(
-          """SELECT e.id, e.revision, e.title, e.night_date, e.starts_at, e.ends_at, e.poster_url, e.lineup,
+  fun page(since: Revision, limit: Int): EventsPage = dataSource.transaction { c ->
+    val rows =
+      c.query(
+        """SELECT e.id, e.revision, e.title, e.night_date, e.starts_at, e.ends_at, e.poster_url, e.lineup,
                e.archived, v.name, v.address
              FROM event e JOIN venue v ON v.id = e.venue_id
              WHERE e.revision > ? ORDER BY e.revision LIMIT ?""",
-          since.value,
-          limit + 1,
-        ) {
-          it.toEventRow()
-        }
-      val pageRows = rows.take(limit)
-      val live = pageRows.filterNot { it.archived }
-      val listings = c.listingsOf(live.map { it.id })
-      EventsPage(
-        events = live.map { it.toDto(listings[it.id].orEmpty()) },
-        removed = pageRows.filter { it.archived }.map { EventId(it.id.toString()) },
-        next = pageRows.lastOrNull()?.revision ?: since,
-        hasMore = rows.size > limit,
-      )
-    }
+        since.value,
+        limit + 1,
+      ) {
+        it.toEventRow()
+      }
+    val pageRows = rows.take(limit)
+    val live = pageRows.filterNot { it.archived }
+    val listings = c.listingsOf(live.map { it.id })
+    EventsPage(
+      events = live.map { it.toDto(listings[it.id].orEmpty()) },
+      removed = pageRows.filter { it.archived }.map { EventId(it.id.toString()) },
+      next = pageRows.lastOrNull()?.revision ?: since,
+      hasMore = rows.size > limit,
+    )
+  }
 
-  /** Archives every live event whose night is before [nightDate]; returns how many were archived. */
-  fun archiveBefore(nightDate: LocalDate): Int =
-    dataSource.transaction { c ->
-      c.lockWrites()
-      c.update(
-        """UPDATE event SET archived = true, revision = nextval('event_revision_seq')
+  /**
+   * Archives every live event whose night is before [nightDate]; returns how many were archived.
+   */
+  fun archiveBefore(nightDate: LocalDate): Int = dataSource.transaction { c ->
+    c.lockWrites()
+    c.update(
+      """UPDATE event SET archived = true, revision = nextval('event_revision_seq')
            WHERE night_date < ? AND NOT archived""",
-        nightDate.toJavaLocalDate(),
-      )
-    }
+      nightDate.toJavaLocalDate(),
+    )
+  }
 
   /** Listings of live events starting between now and [window] from now. */
-  fun listingsStartingWithin(window: Duration): List<ListingRef> =
-    dataSource.transaction { c ->
-      val now = clock.now()
-      c.query(
-        """SELECT l.source, l.external_id, l.url FROM listing l JOIN event e ON e.id = l.event_id
+  fun listingsStartingWithin(window: Duration): List<ListingRef> = dataSource.transaction { c ->
+    val now = clock.now()
+    c.query(
+      """SELECT l.source, l.external_id, l.url FROM listing l JOIN event e ON e.id = l.event_id
            WHERE NOT e.archived AND e.starts_at >= ? AND e.starts_at <= ? ORDER BY e.starts_at""",
-        now.ts(),
-        (now + window).ts(),
-      ) {
-        ListingRef(Source.valueOf(it.getString(1)), it.getString(2), it.getString(3))
-      }
+      now.ts(),
+      (now + window).ts(),
+    ) {
+      ListingRef(Source.valueOf(it.getString(1)), it.getString(2), it.getString(3))
     }
+  }
 
   /** Listings of live events whose lineup has never been read. */
-  fun listingsNeedingLineup(): List<ListingRef> =
-    dataSource.transaction { c ->
-      c.query(
-        """SELECT l.source, l.external_id, l.url FROM listing l JOIN event e ON e.id = l.event_id
-           WHERE NOT e.archived AND l.lineup_checked_at IS NULL ORDER BY e.starts_at""",
-      ) {
-        ListingRef(Source.valueOf(it.getString(1)), it.getString(2), it.getString(3))
-      }
+  fun listingsNeedingLineup(): List<ListingRef> = dataSource.transaction { c ->
+    c.query(
+      """SELECT l.source, l.external_id, l.url FROM listing l JOIN event e ON e.id = l.event_id
+           WHERE NOT e.archived AND l.lineup_checked_at IS NULL ORDER BY e.starts_at"""
+    ) {
+      ListingRef(Source.valueOf(it.getString(1)), it.getString(2), it.getString(3))
     }
+  }
 
   /** Source URL of [id]'s poster, or null when the event is unknown or has none. */
   fun posterUrl(id: EventId): String? {
@@ -205,8 +210,9 @@ class EventStore(private val dataSource: DataSource, private val clock: Clock = 
   }
 
   /** Whether no event has been stored yet. */
-  fun isEmpty(): Boolean =
-    dataSource.transaction { c -> c.query("SELECT 1 FROM event LIMIT 1") { true }.isEmpty() }
+  fun isEmpty(): Boolean = dataSource.transaction { c ->
+    c.query("SELECT 1 FROM event LIMIT 1") { true }.isEmpty()
+  }
 
   private class EventRow(
     val id: UUID,
@@ -256,7 +262,11 @@ class EventStore(private val dataSource: DataSource, private val clock: Clock = 
         createArrayOf("uuid", eventIds.toTypedArray()),
       ) {
         it.getObject(1, UUID::class.java) to
-          ListingDto(Source.valueOf(it.getString(2)), it.getString(3), ListingStatus.valueOf(it.getString(4)))
+          ListingDto(
+            Source.valueOf(it.getString(2)),
+            it.getString(3),
+            ListingStatus.valueOf(it.getString(4)),
+          )
       }
       .groupBy({ it.first }, { it.second })
   }
@@ -307,7 +317,8 @@ private fun Instant.ts(): Timestamp = Timestamp.from(toJavaInstant())
 
 private fun ScrapedListing.contentHash(): String {
   val text =
-    listOf(url, title, startsAt, endsAt, venueName, venueAddress, status, posterUrl).joinToString("\u0000")
+    listOf(url, title, startsAt, endsAt, venueName, venueAddress, status, posterUrl)
+      .joinToString("\u0000")
   return MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") {
     "%02x".format(it)
   }

@@ -33,7 +33,8 @@ abstract class EventStoreLocalContract {
       venue = VenueDto("Rex Club", "5 Boulevard Poissonnière"),
       lineup = listOf("Laurent Garnier"),
       posterPath = "/v1/posters/$id",
-      listings = listOf(ListingDto(Source.DICE, "https://dice.fm/event/$id", ListingStatus.ON_SALE)),
+      listings =
+        listOf(ListingDto(Source.DICE, "https://dice.fm/event/$id", ListingStatus.ON_SALE)),
     )
 
   private fun page(vararg events: EventDto, removed: List<String> = emptyList(), next: Long) =
@@ -45,7 +46,8 @@ abstract class EventStoreLocalContract {
 
     store.apply(page(event("a", 1), event("b", 2), next = 2))
 
-    store.events().first().sortedBy { it.id.value } shouldContainExactly listOf(event("a", 1), event("b", 2))
+    store.events().first().sortedBy { it.id.value } shouldContainExactly
+      listOf(event("a", 1), event("b", 2))
     store.event(EventId("a")).first() shouldBe event("a", 1)
   }
 

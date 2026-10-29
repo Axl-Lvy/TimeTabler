@@ -54,9 +54,10 @@ fun EventsScreen(onOpen: (EventId) -> Unit) {
   LaunchedEffect(syncState) { hasEverSynced = store.hasEverSynced() }
 
   val now = Clock.System.now()
-  val groups = remember(events, query, filter, now.epochSeconds / 60) {
-    filterEvents(events.orEmpty(), query, filter, now)
-  }
+  val groups =
+    remember(events, query, filter, now.epochSeconds / 60) {
+      filterEvents(events.orEmpty(), query, filter, now)
+    }
 
   Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
     Text(
@@ -72,7 +73,10 @@ fun EventsScreen(onOpen: (EventId) -> Unit) {
       singleLine = true,
       modifier = Modifier.fillMaxWidth(),
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 6.dp)) {
+    Row(
+      horizontalArrangement = Arrangement.spacedBy(6.dp),
+      modifier = Modifier.padding(vertical = 6.dp),
+    ) {
       Chip("Tonight", filter == QuickFilter.TONIGHT) {
         filter = if (filter == QuickFilter.TONIGHT) QuickFilter.ALL else QuickFilter.TONIGHT
       }

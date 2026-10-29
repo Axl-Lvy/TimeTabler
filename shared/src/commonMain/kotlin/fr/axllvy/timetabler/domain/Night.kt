@@ -14,7 +14,10 @@ internal expect fun loadTimeZoneDatabase()
 
 private val NIGHT_SHIFT = 6.hours
 
-/** Date of the night an event starting at [start] belongs to, so a 00:30 start counts as the evening before. */
+/**
+ * Date of the night an event starting at [start] belongs to, so a 00:30 start counts as the evening
+ * before.
+ */
 fun nightDateOf(start: Instant): LocalDate = (start - NIGHT_SHIFT).toLocalDateTime(PARIS).date
 
 /** Date of the night in progress at [now]. */

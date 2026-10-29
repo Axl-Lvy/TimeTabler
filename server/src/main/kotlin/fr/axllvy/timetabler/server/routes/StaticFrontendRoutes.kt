@@ -13,7 +13,9 @@ private const val HASHED_ASSET_MAX_AGE_SECONDS = 31_536_000
  */
 private val HASHED_ASSET_PATTERN = Regex("""(composeApp|styles)\.[0-9a-f]{20}\.(js|css)""")
 
-/** Serves the web bundle at `/`: hashed files are cached for a year, everything else revalidated. */
+/**
+ * Serves the web bundle at `/`: hashed files are cached for a year, everything else revalidated.
+ */
 fun Route.staticFrontendRoutes(staticDir: File) {
   staticFiles("/", staticDir) {
     cacheControl { file ->

@@ -27,8 +27,7 @@ enum class ListingStatus {
 @Serializable data class VenueDto(val name: String, val address: String?)
 
 /** One source page selling tickets for an event. */
-@Serializable
-data class ListingDto(val source: Source, val url: String, val status: ListingStatus)
+@Serializable data class ListingDto(val source: Source, val url: String, val status: ListingStatus)
 
 /** One real-world event as clients store and show it. */
 @Serializable

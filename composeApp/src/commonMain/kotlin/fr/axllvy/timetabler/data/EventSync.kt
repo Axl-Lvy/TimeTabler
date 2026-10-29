@@ -35,24 +35,23 @@ class EventSync(private val api: EventsApi, private val store: EventStoreLocal) 
   val state: StateFlow<SyncState> = _state.asStateFlow()
 
   /** Applies every feed page after the stored revision; concurrent calls run one after another. */
-  suspend fun syncOnce(): SyncOutcome =
-    running.withLock {
-      _state.value = SyncState.SYNCING
-      try {
-        do {
-          val page = api.page(store.lastRevision())
-          store.apply(page)
-        } while (page.hasMore)
-        _state.value = SyncState.IDLE
-        SyncOutcome.Ok
-      } catch (e: CancellationException) {
-        _state.value = SyncState.IDLE
-        throw e
-      } catch (e: Throwable) {
-        // Throwable, not Exception: a failed browser fetch on wasm is a JsException.
-        log.w { "Sync failed: ${e.message}" }
-        _state.value = SyncState.OFFLINE
-        SyncOutcome.Offline(e.message ?: e::class.simpleName.orEmpty())
-      }
+  suspend fun syncOnce(): SyncOutcome = running.withLock {
+    _state.value = SyncState.SYNCING
+    try {
+      do {
+        val page = api.page(store.lastRevision())
+        store.apply(page)
+      } while (page.hasMore)
+      _state.value = SyncState.IDLE
+      SyncOutcome.Ok
+    } catch (e: CancellationException) {
+      _state.value = SyncState.IDLE
+      throw e
+    } catch (e: Throwable) {
+      // Throwable, not Exception: a failed browser fetch on wasm is a JsException.
+      log.w { "Sync failed: ${e.message}" }
+      _state.value = SyncState.OFFLINE
+      SyncOutcome.Offline(e.message ?: e::class.simpleName.orEmpty())
     }
+  }
 }

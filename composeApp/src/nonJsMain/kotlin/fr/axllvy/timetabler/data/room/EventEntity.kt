@@ -8,5 +8,4 @@ import androidx.room.PrimaryKey
 data class EventEntity(@PrimaryKey val id: String, val revision: Long, val json: String)
 
 /** One key-value setting of the local store, such as the last applied revision. */
-@Entity(tableName = "meta")
-data class MetaEntity(@PrimaryKey val key: String, val value: String)
+@Entity(tableName = "meta") data class MetaEntity(@PrimaryKey val key: String, val value: String)

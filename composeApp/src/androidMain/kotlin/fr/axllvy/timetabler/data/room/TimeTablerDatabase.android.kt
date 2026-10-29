@@ -6,5 +6,8 @@ import fr.axllvy.timetabler.AndroidContext
 
 internal actual fun databaseBuilder(): RoomDatabase.Builder<TimeTablerDatabase> {
   val context = AndroidContext.context
-  return Room.databaseBuilder<TimeTablerDatabase>(context, context.getDatabasePath("timetabler.db").absolutePath)
+  return Room.databaseBuilder<TimeTablerDatabase>(
+    context,
+    context.getDatabasePath("timetabler.db").absolutePath,
+  )
 }

@@ -25,7 +25,10 @@ private val FOLDS: Map<Char, String> = buildMap {
   put('œ', "oe")
 }
 
-/** Lowercases [text], strips accents and punctuation, and collapses whitespace, for matching and search. */
+/**
+ * Lowercases [text], strips accents and punctuation, and collapses whitespace, for matching and
+ * search.
+ */
 fun normalizeText(text: String): String {
   val folded = buildString {
     for (c in text.lowercase()) {

@@ -97,7 +97,8 @@ class DiceScraper(
           DiceEventParser.performers(result.body)?.let {
             store.setLineup(ref.source, ref.externalId, it)
           } ?: log.w { "No lineup data on ${ref.url}" }
-        is FetchResult.Failed -> log.w { "Could not fetch ${ref.url}: ${result.status} ${result.reason}" }
+        is FetchResult.Failed ->
+          log.w { "Could not fetch ${ref.url}: ${result.status} ${result.reason}" }
       }
     }
   }

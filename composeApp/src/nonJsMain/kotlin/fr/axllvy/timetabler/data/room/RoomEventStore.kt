@@ -14,13 +14,21 @@ class RoomEventStore(database: TimeTablerDatabase) : EventStoreLocal {
 
   private val dao = database.eventDao()
 
-  override fun events(): Flow<List<EventDto>> = dao.observeAll().map { rows -> rows.map { it.toDto() } }
+  override fun events(): Flow<List<EventDto>> =
+    dao.observeAll().map { rows -> rows.map { it.toDto() } }
 
   override fun event(id: EventId): Flow<EventDto?> = dao.observe(id.value).map { it?.toDto() }
 
   override suspend fun apply(page: EventsPage) {
     dao.applyPage(
-      events = page.events.map { EventEntity(it.id.value, it.revision.value, WIRE_JSON.encodeToString(EventDto.serializer(), it)) },
+      events =
+        page.events.map {
+          EventEntity(
+            it.id.value,
+            it.revision.value,
+            WIRE_JSON.encodeToString(EventDto.serializer(), it),
+          )
+        },
       removed = page.removed.map { it.value },
       revision = page.next.value,
     )
@@ -31,5 +39,6 @@ class RoomEventStore(database: TimeTablerDatabase) : EventStoreLocal {
 
   override suspend fun hasEverSynced(): Boolean = dao.meta(EventDao.LAST_REVISION) != null
 
-  private fun EventEntity.toDto(): EventDto = WIRE_JSON.decodeFromString(EventDto.serializer(), json)
+  private fun EventEntity.toDto(): EventDto =
+    WIRE_JSON.decodeFromString(EventDto.serializer(), json)
 }

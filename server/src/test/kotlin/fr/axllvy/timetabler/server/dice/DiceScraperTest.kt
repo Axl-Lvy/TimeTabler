@@ -53,7 +53,8 @@ class DiceScraperTest {
           else -> respond(fixture("dice/event-without-lineup.html"))
         }
     }
-    val fetcher = PoliteFetcher(HttpClient(engine), "TimeTabler/test", timeSource = testScheduler.timeSource)
+    val fetcher =
+      PoliteFetcher(HttpClient(engine), "TimeTabler/test", timeSource = testScheduler.timeSource)
     return DiceScraper(fetcher, store, clock)
   }
 
@@ -75,9 +76,10 @@ class DiceScraperTest {
   fun `a throttled page stops the run and keeps what was stored`() = runTest {
     val party = DiceBrowseParser.dayUrl("party", LocalDate(2026, 11, 7))
 
-    val report =
-      scraper { if (it.url.toString() == party) respondError(HttpStatusCode.TooManyRequests) else null }
-        .scrapeAgenda()
+    val report = scraper {
+      if (it.url.toString() == party) respondError(HttpStatusCode.TooManyRequests) else null
+    }
+      .scrapeAgenda()
 
     report.failed!! shouldContain "429"
     storedTitles().size shouldBe 5
@@ -90,12 +92,12 @@ class DiceScraperTest {
     val party = DiceBrowseParser.dayUrl("party", LocalDate(2026, 11, 7))
     var attempts = 0
 
-    val report =
-      scraper {
-          if (it.url.toString() == party && attempts++ == 0) throw java.io.IOException("Request timeout has expired")
-          else null
-        }
-        .scrapeAgenda()
+    val report = scraper {
+      if (it.url.toString() == party && attempts++ == 0)
+        throw java.io.IOException("Request timeout has expired")
+      else null
+    }
+      .scrapeAgenda()
 
     report.failed.shouldBeNull()
     attempts shouldBe 2
@@ -105,9 +107,11 @@ class DiceScraperTest {
   fun `a page timing out twice stops the run`() = runTest {
     val party = DiceBrowseParser.dayUrl("party", LocalDate(2026, 11, 7))
 
-    val report =
-      scraper { if (it.url.toString() == party) throw java.io.IOException("Request timeout has expired") else null }
-        .scrapeAgenda()
+    val report = scraper {
+      if (it.url.toString() == party) throw java.io.IOException("Request timeout has expired")
+      else null
+    }
+      .scrapeAgenda()
 
     report.failed!! shouldContain "timeout"
     storedTitles().size shouldBe 5
@@ -115,12 +119,19 @@ class DiceScraperTest {
 
   @Test
   fun `an event page without data leaves the lineup empty and the run continues`() = runTest {
-    val report =
-      scraper { if (it.url.toString().endsWith(baron)) respond(fixture("dice/event-without-data.html")) else null }
-        .scrapeAgenda()
+    val report = scraper {
+      if (it.url.toString().endsWith(baron)) respond(fixture("dice/event-without-data.html"))
+      else null
+    }
+      .scrapeAgenda()
 
     report.failed.shouldBeNull()
-    store.page(Revision.ZERO, 1000).events.single { it.title.startsWith("Baron") }.lineup.shouldBeEmpty()
+    store
+      .page(Revision.ZERO, 1000)
+      .events
+      .single { it.title.startsWith("Baron") }
+      .lineup
+      .shouldBeEmpty()
   }
 
   @Test
@@ -135,14 +146,22 @@ class DiceScraperTest {
 
   @Test
   fun `a lineup that failed to load is fetched on the next run`() = runTest {
-    scraper { if (it.url.toString().endsWith(baron)) respondError(HttpStatusCode.GatewayTimeout) else null }
+    scraper {
+      if (it.url.toString().endsWith(baron)) respondError(HttpStatusCode.GatewayTimeout) else null
+    }
       .scrapeAgenda()
     requested.clear()
 
     scraper().scrapeAgenda()
 
-    requested.filter { "/event/" in it } shouldContainExactlyInAnyOrder listOf("https://dice.fm/event/$baron")
-    store.page(Revision.ZERO, 1000).events.single { it.title.startsWith("Baron") }.lineup.size shouldBe 5
+    requested.filter { "/event/" in it } shouldContainExactlyInAnyOrder
+      listOf("https://dice.fm/event/$baron")
+    store
+      .page(Revision.ZERO, 1000)
+      .events
+      .single { it.title.startsWith("Baron") }
+      .lineup
+      .size shouldBe 5
   }
 
   @Test

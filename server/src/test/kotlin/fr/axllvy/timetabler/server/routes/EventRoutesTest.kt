@@ -1,12 +1,12 @@
 package fr.axllvy.timetabler.server.routes
 
 import fr.axllvy.timetabler.domain.Revision
-import fr.axllvy.timetabler.server.timeTablerModule
 import fr.axllvy.timetabler.server.PostgresTestDb
 import fr.axllvy.timetabler.server.events.EventStore
+import fr.axllvy.timetabler.server.events.ScrapedListing
 import fr.axllvy.timetabler.server.offlineFetcher
 import fr.axllvy.timetabler.server.posters.PosterCache
-import fr.axllvy.timetabler.server.events.ScrapedListing
+import fr.axllvy.timetabler.server.timeTablerModule
 import fr.axllvy.timetabler.wire.EventsPage
 import fr.axllvy.timetabler.wire.ListingStatus
 import fr.axllvy.timetabler.wire.Source
@@ -44,7 +44,13 @@ class EventRoutesTest {
 
   private fun app(test: suspend io.ktor.server.testing.ApplicationTestBuilder.() -> Unit) =
     testApplication {
-      application { timeTablerModule(store, PosterCache(createTempDirectory(), offlineFetcher()), staticDir = null) }
+      application {
+        timeTablerModule(
+          store,
+          PosterCache(createTempDirectory(), offlineFetcher()),
+          staticDir = null,
+        )
+      }
       test()
     }
 
@@ -86,8 +92,7 @@ class EventRoutesTest {
     client.get("/v1/events?limit=0").status shouldBe HttpStatusCode.BadRequest
   }
 
-  @Test
-  fun `health answers ok`() = app { client.get("/health").status shouldBe HttpStatusCode.OK }
+  @Test fun `health answers ok`() = app { client.get("/health").status shouldBe HttpStatusCode.OK }
 
   @Test
   fun `page limit defaults clamps and rejects`() {
