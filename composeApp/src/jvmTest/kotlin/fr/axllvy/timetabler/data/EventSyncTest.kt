@@ -76,6 +76,24 @@ class EventSyncTest {
   }
 
   @Test
+  fun `a new server epoch starts the store over`() = runTest {
+    store.apply(EventsPage(listOf(event("old", 7)), emptyList(), Revision(7), false, epoch = "before"))
+    val sync =
+      EventSync(
+        apiServing(
+          EventsPage(emptyList(), emptyList(), Revision(2), false, epoch = "after"),
+          EventsPage(listOf(event("new", 2)), emptyList(), Revision(2), false, epoch = "after"),
+        ),
+        store,
+      )
+
+    sync.syncOnce() shouldBe SyncOutcome.Ok
+
+    sinces shouldContainExactly listOf("7", "0")
+    store.events().first().map { it.id.value } shouldContainExactly listOf("new")
+  }
+
+  @Test
   fun `a later sync starts from the stored revision`() = runTest {
     store.apply(EventsPage(listOf(event("a", 7)), emptyList(), Revision(7), hasMore = false))
 

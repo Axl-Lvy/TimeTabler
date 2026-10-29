@@ -34,14 +34,25 @@ class EventSync(private val api: EventsApi, private val store: EventStoreLocal) 
   /** Current sync state, for showing progress or an offline hint. */
   val state: StateFlow<SyncState> = _state.asStateFlow()
 
-  /** Applies every feed page after the stored revision; concurrent calls run one after another. */
+  /**
+   * Applies every feed page after the stored revision; concurrent calls run one after another. A
+   * page from a new server epoch clears the store and starts again from the first revision.
+   */
   suspend fun syncOnce(): SyncOutcome = running.withLock {
     _state.value = SyncState.SYNCING
     try {
-      do {
+      while (true) {
         val page = api.page(store.lastRevision())
+        val epoch = store.epoch()
+        if (epoch != null && epoch != page.epoch) {
+          // The server database was restored or reseeded: its revisions no longer match ours.
+          log.i { "Server epoch changed, syncing from scratch" }
+          store.clear()
+          continue
+        }
         store.apply(page)
-      } while (page.hasMore)
+        if (!page.hasMore) break
+      }
       _state.value = SyncState.IDLE
       SyncOutcome.Ok
     } catch (e: CancellationException) {

@@ -44,13 +44,18 @@ data class EventDto(
   val listings: List<ListingDto>,
 )
 
-/** One page of the event feed: events changed after the requested revision, up to [next]. */
+/**
+ * One page of the event feed: events changed after the requested revision, up to [next]. [epoch]
+ * names the server database; revisions from another epoch mean nothing, so a client seeing a new
+ * one starts over.
+ */
 @Serializable
 data class EventsPage(
   val events: List<EventDto>,
   val removed: List<EventId>,
   val next: Revision,
   val hasMore: Boolean,
+  val epoch: String = "",
 )
 
 /** JSON configuration shared by the server and every client for the event feed. */

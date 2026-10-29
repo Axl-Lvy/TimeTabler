@@ -26,6 +26,7 @@ import kotlinx.coroutines.sync.withLock
 private const val EVENTS = "events"
 private const val META = "meta"
 private const val LAST_REVISION = "lastRevision"
+private const val EPOCH = "epoch"
 // Bump to recreate every store on the next open; there are no migrations.
 private const val SCHEMA_VERSION = 1
 
@@ -81,6 +82,7 @@ class IndexedDbEventStore(private val databaseName: String = "timetabler") : Eve
       }
       page.removed.forEach { events.delete(Key(it.value.toJsString())) }
       objectStore(META).put(record(LAST_REVISION, page.next.value.toString()))
+      objectStore(META).put(record(EPOCH, page.epoch))
     }
     reload()
   }
@@ -89,6 +91,16 @@ class IndexedDbEventStore(private val databaseName: String = "timetabler") : Eve
     meta(LAST_REVISION)?.toLong()?.let(::Revision) ?: Revision.ZERO
 
   override suspend fun hasEverSynced(): Boolean = meta(LAST_REVISION) != null
+
+  override suspend fun epoch(): String? = meta(EPOCH)
+
+  override suspend fun clear() {
+    db().writeTransaction(EVENTS, META) {
+      objectStore(EVENTS).clear()
+      objectStore(META).clear()
+    }
+    reload()
+  }
 
   private suspend fun meta(key: String): String? =
     db()

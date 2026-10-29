@@ -37,8 +37,8 @@ abstract class EventStoreLocalContract {
         listOf(ListingDto(Source.DICE, "https://dice.fm/event/$id", ListingStatus.ON_SALE)),
     )
 
-  private fun page(vararg events: EventDto, removed: List<String> = emptyList(), next: Long) =
-    EventsPage(events.toList(), removed.map(::EventId), Revision(next), hasMore = false)
+  private fun page(vararg events: EventDto, removed: List<String> = emptyList(), next: Long, epoch: String = "e1") =
+    EventsPage(events.toList(), removed.map(::EventId), Revision(next), hasMore = false, epoch = epoch)
 
   @Test
   fun appliedEventsAreStoredWholly() = runTest {
@@ -89,5 +89,28 @@ abstract class EventStoreLocalContract {
     store.apply(page(event("a", 4, title = "Renamed"), next = 4))
 
     store.events().first().single().title shouldBe "Renamed"
+  }
+
+  @Test
+  fun epochFollowsTheAppliedPage() = runTest {
+    val store = newStore()
+    store.epoch() shouldBe null
+
+    store.apply(page(event("a", 1), next = 1, epoch = "e7"))
+
+    store.epoch() shouldBe "e7"
+  }
+
+  @Test
+  fun clearForgetsEverything() = runTest {
+    val store = newStore()
+    store.apply(page(event("a", 1), next = 1))
+
+    store.clear()
+
+    store.events().first() shouldBe emptyList()
+    store.lastRevision() shouldBe Revision.ZERO
+    store.hasEverSynced() shouldBe false
+    store.epoch() shouldBe null
   }
 }
