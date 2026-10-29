@@ -51,7 +51,10 @@ class DiceBrowseParserTest {
   fun `skips an event with a malformed date`() {
     val html =
       fixture("dice/day-page.html")
-        .replace("\"event_start_date\":\"2026-11-07T20:00:00+01:00\"", "\"event_start_date\":\"TBA\"")
+        .replace(
+          "\"event_start_date\":\"2026-11-07T20:00:00+01:00\"",
+          "\"event_start_date\":\"TBA\"",
+        )
 
     val page = DiceBrowseParser.parse(html)!!
 

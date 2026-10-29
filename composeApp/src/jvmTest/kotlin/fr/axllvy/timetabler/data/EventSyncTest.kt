@@ -19,11 +19,11 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.headersOf
 import java.io.IOException
 import kotlin.test.Test
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
-import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.datetime.LocalDate
 
 class EventSyncTest {
@@ -79,7 +79,9 @@ class EventSyncTest {
 
   @Test
   fun `a new server epoch starts the store over`() = runTest {
-    store.apply(EventsPage(listOf(event("old", 7)), emptyList(), Revision(7), false, epoch = "before"))
+    store.apply(
+      EventsPage(listOf(event("old", 7)), emptyList(), Revision(7), false, epoch = "before")
+    )
     val sync =
       EventSync(
         apiServing(
@@ -124,7 +126,11 @@ class EventSyncTest {
   @Test
   fun `a server that never answers is reported as offline`(): Unit = runBlocking {
     val hanging = MockEngine { kotlinx.coroutines.awaitCancellation() }
-    val api = EventsApi(HttpClient(hanging) { timeTablerDefaults(requestTimeout = 300.milliseconds) }, "https://tt.example")
+    val api =
+      EventsApi(
+        HttpClient(hanging) { timeTablerDefaults(requestTimeout = 300.milliseconds) },
+        "https://tt.example",
+      )
 
     EventSync(api, store).syncOnce().shouldBeInstanceOf<SyncOutcome.Offline>()
   }

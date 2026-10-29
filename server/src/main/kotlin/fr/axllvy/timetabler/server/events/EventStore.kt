@@ -163,7 +163,8 @@ class EventStore(private val dataSource: DataSource, private val clock: Clock = 
       removed = pageRows.filter { it.archived }.map { EventId(it.id.toString()) },
       next = pageRows.lastOrNull()?.revision ?: since,
       hasMore = rows.size > limit,
-      epoch = c.query("SELECT value FROM server_meta WHERE key = 'epoch'") { it.getString(1) }.single(),
+      epoch =
+        c.query("SELECT value FROM server_meta WHERE key = 'epoch'") { it.getString(1) }.single(),
     )
   }
 

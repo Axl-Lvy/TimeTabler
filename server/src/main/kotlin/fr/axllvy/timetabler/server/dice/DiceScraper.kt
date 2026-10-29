@@ -49,10 +49,15 @@ class DiceScraper(
           when (val result = fetchRetryingTimeouts(url)) {
             is FetchResult.Ok -> result.body
             is FetchResult.Failed ->
-              return stopped(pages, upserted, "$url: ${result.status ?: "no response"} ${result.reason}")
+              return stopped(
+                pages,
+                upserted,
+                "$url: ${result.status ?: "no response"} ${result.reason}",
+              )
           }
         pages++
-        val page = DiceBrowseParser.parse(body) ?: return stopped(pages, upserted, "$url: no page data")
+        val page =
+          DiceBrowseParser.parse(body) ?: return stopped(pages, upserted, "$url: no page data")
         if (page.overflow) log.w { "DICE $category on $day lists more events than one page shows" }
         for (listing in page.listings) {
           val result = store.upsert(listing)

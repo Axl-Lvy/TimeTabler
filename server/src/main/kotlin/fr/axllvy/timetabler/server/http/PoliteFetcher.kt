@@ -9,8 +9,8 @@ import io.ktor.client.statement.readRawBytes
 import io.ktor.http.HttpHeaders
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
-import io.ktor.http.takeFrom
 import io.ktor.http.isSuccess
+import io.ktor.http.takeFrom
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.ComparableTimeMark
@@ -77,7 +77,8 @@ class PoliteFetcher(
         }
       val location = response.headers[HttpHeaders.Location]
       when {
-        response.status.value in 300..399 && location != null -> target = URLBuilder(target).takeFrom(location).build()
+        response.status.value in 300..399 && location != null ->
+          target = URLBuilder(target).takeFrom(location).build()
         response.status.isSuccess() -> return read(response)
         else -> return onFailure(response.status.value, response.status.description)
       }

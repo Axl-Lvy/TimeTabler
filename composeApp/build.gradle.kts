@@ -206,7 +206,9 @@ val hashWasmJsBundle by tasks.registering {
     val shell =
       distDir
         .walkTopDown()
-        .filter { it.isFile && it.name != "sw.js" && !it.name.endsWith(".map") && !it.name.endsWith(".txt") }
+        .filter {
+          it.isFile && it.name != "sw.js" && !it.name.endsWith(".map") && !it.name.endsWith(".txt")
+        }
         .map { "/" + it.relativeTo(distDir).invariantSeparatorsPath }
         .sorted()
         .toList()
@@ -220,8 +222,13 @@ val hashWasmJsBundle by tasks.registering {
     val rewritten =
       original
         .replace("const BUILD = \"dev\";", "const BUILD = \"$build\";")
-        .replace("/*PRECACHE*/[]/*END*/", (listOf("/") + shell).joinToString(", ", "[", "]") { "\"$it\"" })
-    check(rewritten.contains(build) && rewritten.contains("\"/index.html\"")) { "$sw placeholders not found" }
+        .replace(
+          "/*PRECACHE*/[]/*END*/",
+          (listOf("/") + shell).joinToString(", ", "[", "]") { "\"$it\"" },
+        )
+    check(rewritten.contains(build) && rewritten.contains("\"/index.html\"")) {
+      "$sw placeholders not found"
+    }
     sw.writeText(rewritten)
   }
 }

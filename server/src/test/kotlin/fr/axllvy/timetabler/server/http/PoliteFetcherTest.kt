@@ -78,10 +78,15 @@ class PoliteFetcherTest {
     val engine = MockEngine { request ->
       times += testScheduler.currentTime
       if (request.url.encodedPath == "/event/1")
-        respond("", HttpStatusCode.PermanentRedirect, headersOf(HttpHeaders.Location, "/event/slug-1"))
+        respond(
+          "",
+          HttpStatusCode.PermanentRedirect,
+          headersOf(HttpHeaders.Location, "/event/slug-1"),
+        )
       else respond("page ${request.url.encodedPath}")
     }
-    val fetcher = PoliteFetcher(HttpClient(engine), "TimeTabler/test", timeSource = testScheduler.timeSource)
+    val fetcher =
+      PoliteFetcher(HttpClient(engine), "TimeTabler/test", timeSource = testScheduler.timeSource)
 
     val result = fetcher.get("https://dice.fm/event/1")
 
