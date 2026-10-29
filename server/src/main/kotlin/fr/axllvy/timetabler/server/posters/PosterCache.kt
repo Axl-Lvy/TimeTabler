@@ -34,18 +34,21 @@ class PosterCache(private val dir: Path, private val fetcher: PoliteFetcher) {
   suspend fun jpeg(id: EventId, sourceUrl: String): ByteArray? {
     val file = dir.resolve("${id.value}.jpg")
     if (file.exists()) return file.readBytes()
-    return inFlight.computeIfAbsent(id) { Mutex() }.withLock {
-      if (file.exists()) return@withLock file.readBytes()
-      val source = fetcher.getBytes(sourceUrl) ?: return@withLock null
-      val image = runCatching { ImageIO.read(source.inputStream()) }.getOrNull() ?: return@withLock null
-      val jpeg = encode(resize(image))
-      dir.createDirectories()
-      // Written aside then moved, so a reader never sees a half-written poster.
-      val partial = dir.resolve("${id.value}.jpg.part")
-      partial.writeBytes(jpeg)
-      partial.moveTo(file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-      jpeg
-    }
+    return inFlight
+      .computeIfAbsent(id) { Mutex() }
+      .withLock {
+        if (file.exists()) return@withLock file.readBytes()
+        val source = fetcher.getBytes(sourceUrl) ?: return@withLock null
+        val image =
+          runCatching { ImageIO.read(source.inputStream()) }.getOrNull() ?: return@withLock null
+        val jpeg = encode(resize(image))
+        dir.createDirectories()
+        // Written aside then moved, so a reader never sees a half-written poster.
+        val partial = dir.resolve("${id.value}.jpg.part")
+        partial.writeBytes(jpeg)
+        partial.moveTo(file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        jpeg
+      }
   }
 
   private fun resize(image: BufferedImage): BufferedImage {

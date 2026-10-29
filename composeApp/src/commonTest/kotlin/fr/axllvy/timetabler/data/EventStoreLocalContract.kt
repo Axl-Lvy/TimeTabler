@@ -37,8 +37,19 @@ abstract class EventStoreLocalContract {
         listOf(ListingDto(Source.DICE, "https://dice.fm/event/$id", ListingStatus.ON_SALE)),
     )
 
-  private fun page(vararg events: EventDto, removed: List<String> = emptyList(), next: Long, epoch: String = "e1") =
-    EventsPage(events.toList(), removed.map(::EventId), Revision(next), hasMore = false, epoch = epoch)
+  private fun page(
+    vararg events: EventDto,
+    removed: List<String> = emptyList(),
+    next: Long,
+    epoch: String = "e1",
+  ) =
+    EventsPage(
+      events.toList(),
+      removed.map(::EventId),
+      Revision(next),
+      hasMore = false,
+      epoch = epoch,
+    )
 
   @Test
   fun appliedEventsAreStoredWholly() = runTest {

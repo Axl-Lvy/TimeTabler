@@ -40,7 +40,8 @@ class PosterCacheTest {
       )
     val cache = PosterCache(createTempDirectory(), fetcher)
 
-    val results = (1..4).map { async { cache.jpeg(EventId("e1"), "https://img.example/e1.png") } }.awaitAll()
+    val results =
+      (1..4).map { async { cache.jpeg(EventId("e1"), "https://img.example/e1.png") } }.awaitAll()
 
     upstream.get() shouldBe 1
     results.map { it?.size }.toSet().size shouldBe 1

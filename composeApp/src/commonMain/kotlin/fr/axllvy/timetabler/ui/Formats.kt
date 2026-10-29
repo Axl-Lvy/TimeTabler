@@ -43,7 +43,8 @@ fun eventBadge(listings: List<ListingDto>): String =
   when {
     listings.isNotEmpty() && listings.all { it.status == ListingStatus.CANCELLED } -> "cancelled"
     listings.isNotEmpty() &&
-      listings.all { it.status == ListingStatus.SOLD_OUT || it.status == ListingStatus.CANCELLED } ->
-      "sold out"
+      listings.all {
+        it.status == ListingStatus.SOLD_OUT || it.status == ListingStatus.CANCELLED
+      } -> "sold out"
     else -> "lineup"
   }

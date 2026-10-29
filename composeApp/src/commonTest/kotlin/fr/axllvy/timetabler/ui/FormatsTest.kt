@@ -30,13 +30,16 @@ class FormatsTest {
     headliners(listOf("A", "B")) shouldBe "A, B"
   }
 
-  private fun listing(status: ListingStatus) = ListingDto(Source.DICE, "https://dice.fm/event/x", status)
+  private fun listing(status: ListingStatus) =
+    ListingDto(Source.DICE, "https://dice.fm/event/x", status)
 
   @Test
   fun `badges a cancelled or sold out event`() {
     eventBadge(listOf(listing(ListingStatus.CANCELLED))) shouldBe "cancelled"
-    eventBadge(listOf(listing(ListingStatus.SOLD_OUT), listing(ListingStatus.CANCELLED))) shouldBe "sold out"
-    eventBadge(listOf(listing(ListingStatus.SOLD_OUT), listing(ListingStatus.ON_SALE))) shouldBe "lineup"
+    eventBadge(listOf(listing(ListingStatus.SOLD_OUT), listing(ListingStatus.CANCELLED))) shouldBe
+      "sold out"
+    eventBadge(listOf(listing(ListingStatus.SOLD_OUT), listing(ListingStatus.ON_SALE))) shouldBe
+      "lineup"
     eventBadge(emptyList()) shouldBe "lineup"
   }
 }

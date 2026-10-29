@@ -24,7 +24,12 @@ interface EventDao {
 
   /** Applies one feed page atomically. */
   @Transaction
-  suspend fun applyPage(events: List<EventEntity>, removed: List<String>, revision: Long, epoch: String) {
+  suspend fun applyPage(
+    events: List<EventEntity>,
+    removed: List<String>,
+    revision: Long,
+    epoch: String,
+  ) {
     upsertAll(events)
     if (removed.isNotEmpty()) deleteAll(removed)
     setMeta(MetaEntity(LAST_REVISION, revision.toString()))
