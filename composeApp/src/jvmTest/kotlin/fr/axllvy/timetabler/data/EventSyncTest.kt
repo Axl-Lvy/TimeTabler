@@ -84,6 +84,17 @@ class EventSyncTest {
   }
 
   @Test
+  fun `a failure that is not an exception is reported as offline`() = runTest {
+    // On wasm a failed browser fetch surfaces as a JsException, which is a Throwable, not an Exception.
+    val api = EventsApi(HttpClient(MockEngine { throw object : Throwable("Fail to fetch") {} }), "https://tt.example")
+    val sync = EventSync(api, store)
+
+    sync.syncOnce().shouldBeInstanceOf<SyncOutcome.Offline>()
+
+    sync.state.value shouldBe SyncState.OFFLINE
+  }
+
+  @Test
   fun `no network keeps the stored events`() = runTest {
     store.apply(EventsPage(listOf(event("a", 1)), emptyList(), Revision(1), hasMore = false))
     val offline = EventsApi(HttpClient(MockEngine { throw IOException("no route") }), "https://tt.example")
