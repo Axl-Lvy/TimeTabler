@@ -1,5 +1,6 @@
 package fr.axllvy.timetabler.server.posters
 
+import co.touchlab.kermit.Logger
 import fr.axllvy.timetabler.domain.EventId
 import fr.axllvy.timetabler.server.events.PosterRef
 import fr.axllvy.timetabler.server.http.PoliteFetcher
@@ -15,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap
 import javax.imageio.IIOImage
 import javax.imageio.ImageIO
 import javax.imageio.ImageWriteParam
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.io.path.createDirectories
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.exists
@@ -53,6 +55,7 @@ class PosterCache(
   private val timeSource: TimeSource.WithComparableMarks = TimeSource.Monotonic,
 ) {
 
+  private val log = Logger.withTag("PosterCache")
   private val inFlight = ConcurrentHashMap<EventId, Mutex>()
   private val failedAt = ConcurrentHashMap<String, ComparableTimeMark>()
 
@@ -75,8 +78,15 @@ class PosterCache(
           return@withLock null
         }
         val jpeg =
-          fetcher.getBytes(sourceUrl)?.let { source ->
-            withContext(Dispatchers.IO) { convertAndStore(id, source, file) }
+          try {
+            fetcher.getBytes(sourceUrl)?.let { source ->
+              withContext(Dispatchers.IO) { convertAndStore(id, source, file) }
+            }
+          } catch (e: CancellationException) {
+            throw e
+          } catch (e: Exception) {
+            log.w { "Poster $sourceUrl failed: ${e.message}" }
+            null
           }
         if (jpeg == null) failedAt[file.name] = timeSource.markNow() else failedAt.remove(file.name)
         jpeg

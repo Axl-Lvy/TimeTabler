@@ -17,9 +17,11 @@ import io.ktor.client.request.HttpResponseData
 import io.ktor.http.HttpStatusCode
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
+import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
 import javax.imageio.ImageIO
 import kotlin.io.path.createTempDirectory
+import kotlin.io.path.createTempFile
 import kotlin.io.path.listDirectoryEntries
 import kotlin.math.abs
 import kotlin.test.Test
@@ -42,7 +44,8 @@ class PosterCacheTest {
   private val time = TestTimeSource()
 
   private fun cache(
-    respond: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData
+    dir: Path = this.dir,
+    respond: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData,
   ): PosterCache {
     val engine = MockEngine { request ->
       upstream.incrementAndGet()
@@ -142,6 +145,23 @@ class PosterCacheTest {
     val second = cache.prefetch(posters)
 
     first shouldBe 2
+    second shouldBe 0
+    upstream.get() shouldBe 2
+  }
+
+  @Test
+  fun `prefetch goes on past posters it cannot store`(): Unit = runBlocking {
+    val cache = cache(dir = createTempFile()) { respond(png()) }
+    val posters =
+      listOf(
+        PosterRef(EventId("e1"), "https://img.example/e1.png"),
+        PosterRef(EventId("e2"), "https://img.example/e2.png"),
+      )
+
+    val first = cache.prefetch(posters)
+    val second = cache.prefetch(posters)
+
+    first shouldBe 0
     second shouldBe 0
     upstream.get() shouldBe 2
   }
