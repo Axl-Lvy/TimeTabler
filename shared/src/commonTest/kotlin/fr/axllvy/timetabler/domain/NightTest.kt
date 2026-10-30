@@ -2,6 +2,7 @@ package fr.axllvy.timetabler.domain
 
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -42,8 +43,23 @@ class NightTest {
   }
 
   @Test
-  fun `the night the clocks go back still ends at six`() {
-    nightEnd(LocalDate(2026, 10, 24)) shouldBe paris("2026-10-25T06:00")
+  fun `the night the clocks go forward ends when tonight moves on`() {
+    val night = LocalDate(2026, 3, 28)
+
+    val end = nightEnd(night)
+
+    tonight(end - 1.milliseconds) shouldBe night
+    tonight(end) shouldBe LocalDate(2026, 3, 29)
+  }
+
+  @Test
+  fun `the night the clocks go back ends when tonight moves on`() {
+    val night = LocalDate(2026, 10, 24)
+
+    val end = nightEnd(night)
+
+    tonight(end - 1.milliseconds) shouldBe night
+    tonight(end) shouldBe LocalDate(2026, 10, 25)
   }
 
   @Test

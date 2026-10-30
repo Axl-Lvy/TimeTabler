@@ -28,6 +28,8 @@ fun nightDateOf(start: Instant): LocalDate = (start - NIGHT_SHIFT).toLocalDateTi
 /** Date of the night in progress at [now]. */
 fun tonight(now: Instant): LocalDate = nightDateOf(now)
 
-/** Instant at which [night] ends and the next night starts: 06:00 in Paris the day after. */
+/**
+ * Instant at which [night] ends and [tonight] moves on: six hours after the next Paris midnight.
+ */
 fun nightEnd(night: LocalDate): Instant =
-  LocalDateTime(night.plus(DatePeriod(days = 1)), LocalTime(6, 0)).toInstant(PARIS)
+  LocalDateTime(night.plus(DatePeriod(days = 1)), LocalTime(0, 0)).toInstant(PARIS) + NIGHT_SHIFT

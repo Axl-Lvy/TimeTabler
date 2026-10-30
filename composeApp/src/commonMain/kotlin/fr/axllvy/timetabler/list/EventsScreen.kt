@@ -21,7 +21,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -34,11 +33,9 @@ import fr.axllvy.timetabler.data.EventStoreLocal
 import fr.axllvy.timetabler.data.EventSync
 import fr.axllvy.timetabler.data.SyncState
 import fr.axllvy.timetabler.domain.EventId
-import fr.axllvy.timetabler.domain.nightEnd
 import fr.axllvy.timetabler.domain.tonight
 import fr.axllvy.timetabler.ui.nightLabel
 import kotlin.time.Clock
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -57,17 +54,11 @@ fun EventsScreen(onOpen: (EventId) -> Unit) {
   var filter by rememberSaveable { mutableStateOf(QuickFilter.ALL) }
   LaunchedEffect(syncState) { hasEverSynced = store.hasEverSynced() }
 
-  // Only "tonight" depends on the time, so the list recomputes when a night ends.
-  val now by
-    produceState(Clock.System.now()) {
-      while (true) {
-        val current = Clock.System.now()
-        delay(nightEnd(tonight(current)) - current)
-        value = Clock.System.now()
-      }
-    }
+  val currentNight by remember { tonightUpdates() }.collectAsState(tonight(Clock.System.now()))
   val groups =
-    remember(events, query, filter, now) { filterEvents(events.orEmpty(), query, filter, now) }
+    remember(events, query, filter, currentNight) {
+      filterEvents(events.orEmpty(), query, filter, currentNight)
+    }
 
   Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
     Text(
@@ -119,11 +110,10 @@ fun EventsScreen(onOpen: (EventId) -> Unit) {
             contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
           ) {
-            val tonight = tonight(now)
             groups.forEach { group ->
               item(key = group.night.toString()) {
                 Text(
-                  nightLabel(group.night, tonight).uppercase(),
+                  nightLabel(group.night, currentNight).uppercase(),
                   style = MaterialTheme.typography.labelMedium,
                   color = MaterialTheme.colorScheme.primary,
                   modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
