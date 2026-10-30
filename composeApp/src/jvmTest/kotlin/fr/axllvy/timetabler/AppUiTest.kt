@@ -20,6 +20,8 @@ import fr.axllvy.timetabler.domain.EventId
 import fr.axllvy.timetabler.domain.Revision
 import fr.axllvy.timetabler.domain.nightDateOf
 import fr.axllvy.timetabler.nav.eventRoute
+import fr.axllvy.timetabler.ui.DateNames
+import fr.axllvy.timetabler.ui.shortDate
 import fr.axllvy.timetabler.wire.EventDto
 import fr.axllvy.timetabler.wire.EventsPage
 import fr.axllvy.timetabler.wire.ListingDto
@@ -51,6 +53,25 @@ class AppUiTest {
   private val store = RoomEventStore(inMemoryDatabase())
   private val offlineApi = EventsApi(HttpClient(MockEngine { throw IOException("offline") }), "")
   private val testModules = modulesWith(EventSync(offlineApi, store))
+  private val frenchDateNames =
+    DateNames(
+      days = listOf("lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."),
+      months =
+        listOf(
+          "janv.",
+          "févr.",
+          "mars",
+          "avr.",
+          "mai",
+          "juin",
+          "juil.",
+          "août",
+          "sept.",
+          "oct.",
+          "nov.",
+          "déc.",
+        ),
+    )
 
   private fun modulesWith(sync: EventSync) =
     listOf(
@@ -124,7 +145,8 @@ class AppUiTest {
     Locale.setDefault(Locale.FRENCH)
     try {
       runComposeUiTest {
-        storePage(listOf(possession()))
+        val event = possession()
+        storePage(listOf(event))
         setContent { App(testModules) }
 
         waitUntil("Possession shown", timeoutMillis = 5_000) {
@@ -132,6 +154,12 @@ class AppUiTest {
         }
         onNodeWithText("Ce soir").assertExists()
         onNodeWithText("Ce week-end").assertExists()
+        onNodeWithText(
+            shortDate(event.nightDate, frenchDateNames),
+            substring = true,
+            ignoreCase = true,
+          )
+          .assertExists()
         onNodeWithText("Possession").performClick()
 
         waitUntil("Billets sur DICE shown", timeoutMillis = 5_000) {
