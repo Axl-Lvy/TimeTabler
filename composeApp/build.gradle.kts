@@ -15,6 +15,7 @@ plugins {
   alias(libs.plugins.composeCompiler)
   alias(libs.plugins.kotlinX.serialization.plugin)
   alias(libs.plugins.ktfmt)
+  alias(libs.plugins.kover)
   alias(libs.plugins.room)
   alias(libs.plugins.ksp)
 }
@@ -148,6 +149,21 @@ dependencies {
   add("kspIosSimulatorArm64", libs.androidx.room.compiler)
   add("kspIosArm64", libs.androidx.room.compiler)
   add("kspJvm", libs.androidx.room.compiler)
+
+  // Kover only reports classes of the projects listed here, so :shared is merged in.
+  kover(projects.shared)
+}
+
+kover {
+  useJacoco("0.8.14")
+
+  reports {
+    filters {
+      excludes {
+        files("**/R.class", "**/Res.class", "**/BuildConfig.*", "**/*Test*.*", "**/generated/**")
+      }
+    }
+  }
 }
 
 // Skiko loads its native library through System::load, which JDK 24+ flags as restricted.

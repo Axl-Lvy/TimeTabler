@@ -4,6 +4,7 @@ plugins {
   alias(libs.plugins.kotlinJvm)
   alias(libs.plugins.kotlinX.serialization.plugin)
   alias(libs.plugins.ktfmt)
+  alias(libs.plugins.kover)
   application
   `java-test-fixtures`
 }
@@ -72,3 +73,9 @@ tasks.processResources {
 }
 
 ktfmt { googleStyle() }
+
+// Same engine as composeApp. Fixtures are test code, but Kover only excludes the test compilation.
+kover {
+  useJacoco("0.8.14")
+  currentProject { sources { excludedSourceSets.add("testFixtures") } }
+}
