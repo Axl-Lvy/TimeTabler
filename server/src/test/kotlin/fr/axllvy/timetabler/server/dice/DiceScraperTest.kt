@@ -37,6 +37,24 @@ class DiceScraperTest {
   private val emptyDay =
     """<script id="__NEXT_DATA__">{"props":{"pageProps":{"events":[],"nextCursor":null}}}</script>"""
   private val requested = mutableListOf<String>()
+  private val djDay = DiceBrowseParser.dayUrl("dj", LocalDate(2026, 11, 7))
+  private val house =
+    "https://dice.fm/browse/paris-5b23e8a0e63cc224a4c36a2d/music/dj/house?from=2026-11-07&until=2026-11-07"
+
+  private fun browsePage(
+    ids: List<String>,
+    overflow: Boolean = false,
+    subGenres: List<String> = emptyList(),
+  ): String {
+    val events =
+      ids.joinToString(",") {
+        """{"id":"$it","name":"Night $it","dates":{"event_start_date":"2026-11-07T23:00:00+01:00"},"venues":[{"name":"Rex Club"}]}"""
+      }
+    val filters =
+      subGenres.joinToString(",") { """{"activateLink":"${it.removePrefix("https://dice.fm")}"}""" }
+    val cursor = if (overflow) "\"next\"" else "null"
+    return """<script id="__NEXT_DATA__">{"props":{"pageProps":{"events":[$events],"nextCursor":$cursor,"secondaryFilters":[$filters]}}}</script>"""
+  }
 
   private fun TestScope.scraper(
     route: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData? = { null }
@@ -70,6 +88,66 @@ class DiceScraperTest {
     storedTitles().size shouldBe 5
     store.page(Revision.ZERO, 1000).events.single { it.title.startsWith("Baron") }.lineup shouldBe
       listOf("Baron Von Trax", "Cattoni", "Gray", "MaaxD", "VolviK")
+  }
+
+  @Test
+  fun `an overflowing day stores the events of its sub-genre pages`() = runTest {
+    val report = scraper {
+      when (it.url.toString()) {
+        djDay -> respond(browsePage(listOf("a1"), overflow = true, subGenres = listOf(house)))
+        house -> respond(browsePage(listOf("a1", "b1")))
+        else -> null
+      }
+    }
+      .scrapeAgenda()
+
+    report.failed.shouldBeNull()
+    report.overflowedDays shouldBe 1
+    report.overflowedSubGenres shouldBe 0
+    storedTitles() shouldContainExactlyInAnyOrder listOf("Night a1", "Night b1")
+  }
+
+  @Test
+  fun `a day that does not overflow fetches no sub-genre page`() = runTest {
+    val report = scraper {
+      if (it.url.toString() == djDay) respond(browsePage(listOf("a1"), subGenres = listOf(house)))
+      else null
+    }
+      .scrapeAgenda()
+
+    report.overflowedDays shouldBe 0
+    requested.none { it == house } shouldBe true
+  }
+
+  @Test
+  fun `an overflowing sub-genre page is counted and the run continues`() = runTest {
+    val report = scraper {
+      when (it.url.toString()) {
+        djDay -> respond(browsePage(listOf("a1"), overflow = true, subGenres = listOf(house)))
+        house -> respond(browsePage(listOf("b1"), overflow = true))
+        else -> null
+      }
+    }
+      .scrapeAgenda()
+
+    report.failed.shouldBeNull()
+    report.overflowedSubGenres shouldBe 1
+    report.pages shouldBe 61 * DICE_CATEGORIES.size + 1
+  }
+
+  @Test
+  fun `a throttled sub-genre page stops the run without lineups`() = runTest {
+    val report = scraper {
+      when (it.url.toString()) {
+        djDay -> respond(browsePage(listOf("a1"), overflow = true, subGenres = listOf(house)))
+        house -> respondError(HttpStatusCode.TooManyRequests)
+        else -> null
+      }
+    }
+      .scrapeAgenda()
+
+    report.failed!! shouldContain "429"
+    requested.filter { "/event/" in it }.shouldBeEmpty()
   }
 
   @Test

@@ -3,6 +3,7 @@ package fr.axllvy.timetabler.server.dice
 import fr.axllvy.timetabler.server.fixture
 import fr.axllvy.timetabler.wire.ListingStatus
 import fr.axllvy.timetabler.wire.Source
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.nulls.shouldBeNull
@@ -72,6 +73,22 @@ class DiceBrowseParserTest {
 
     page.overflow shouldBe true
     page.listings shouldHaveSize 22
+  }
+
+  @Test
+  fun `lists the sub-genre pages of a category day`() {
+    val page = DiceBrowseParser.parse(fixture("dice/day-page-subgenres.html"))!!
+
+    page.subGenreUrls shouldHaveSize 12
+    page.subGenreUrls.first() shouldBe
+      "https://dice.fm/browse/paris-5b23e8a0e63cc224a4c36a2d/music/dj/dance?from=2026-10-31&until=2026-10-31"
+  }
+
+  @Test
+  fun `a page without sub-genre filters lists no sub-genre page`() {
+    val page = DiceBrowseParser.parse(fixture("dice/day-page-overflow.html"))!!
+
+    page.subGenreUrls.shouldBeEmpty()
   }
 
   @Test

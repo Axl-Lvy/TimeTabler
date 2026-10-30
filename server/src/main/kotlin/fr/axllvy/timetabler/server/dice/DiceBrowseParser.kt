@@ -14,10 +14,18 @@ import org.jsoup.Jsoup
 /** Music categories of DICE's Paris browse pages that the scraper walks. */
 val DICE_CATEGORIES = listOf("dj", "party", "gig")
 
-private const val PARIS_BROWSE = "https://dice.fm/browse/paris-5b23e8a0e63cc224a4c36a2d"
+private const val DICE_HOST = "https://dice.fm"
+private const val PARIS_BROWSE = "$DICE_HOST/browse/paris-5b23e8a0e63cc224a4c36a2d"
 
-/** Events of one DICE browse page; [overflow] means DICE had more than the page shows. */
-data class DiceBrowsePage(val listings: List<ScrapedListing>, val overflow: Boolean)
+/**
+ * Events of one DICE browse page; [overflow] means DICE had more than the page shows, and
+ * [subGenreUrls] are the same page narrowed to each sub-genre.
+ */
+data class DiceBrowsePage(
+  val listings: List<ScrapedListing>,
+  val overflow: Boolean,
+  val subGenreUrls: List<String>,
+)
 
 /** Reads DICE browse pages from their embedded page data. */
 object DiceBrowseParser {
@@ -40,6 +48,10 @@ object DiceBrowseParser {
             .getOrNull()
         },
       overflow = cursor != null && cursor != JsonNull,
+      subGenreUrls =
+        (props["secondaryFilters"] as? JsonArray).orEmpty().mapNotNull {
+          it["activateLink"].string?.let { link -> DICE_HOST + link }
+        },
     )
   }
 
