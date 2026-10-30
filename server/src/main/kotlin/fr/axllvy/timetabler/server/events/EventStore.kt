@@ -116,7 +116,7 @@ class EventStore(private val dataSource: DataSource, private val clock: Clock = 
         )
         c.update(
           """UPDATE event SET revision = nextval('event_revision_seq'), night_date = ?, starts_at = ?, ends_at = ?,
-                 venue_id = ?, title = ?, poster_url = ?, archived = false WHERE id = ?""",
+                 venue_id = ?, title = ?, poster_url = ?, archived = false, archived_at = NULL WHERE id = ?""",
           nightDateOf(listing.startsAt).toJavaLocalDate(),
           listing.startsAt.ts(),
           listing.endsAt?.ts(),
@@ -158,13 +158,16 @@ class EventStore(private val dataSource: DataSource, private val clock: Clock = 
     val pageRows = rows.take(limit)
     val live = pageRows.filterNot { it.archived }
     val listings = c.listingsOf(live.map { it.id })
+    val meta = c.query("SELECT key, value FROM server_meta") { it.getString(1) to it.getString(2) }
     EventsPage(
       events = live.map { it.toDto(listings[it.id].orEmpty()) },
       removed = pageRows.filter { it.archived }.map { EventId(it.id.toString()) },
       next = pageRows.lastOrNull()?.revision ?: since,
       hasMore = rows.size > limit,
-      epoch =
-        c.query("SELECT value FROM server_meta WHERE key = 'epoch'") { it.getString(1) }.single(),
+      epoch = meta.single { it.first == EPOCH }.second,
+      purgedThrough =
+        meta.firstOrNull { it.first == PURGED_THROUGH }?.let { Revision(it.second.toLong()) }
+          ?: Revision.ZERO,
     )
   }
 
@@ -174,10 +177,39 @@ class EventStore(private val dataSource: DataSource, private val clock: Clock = 
   fun archiveBefore(nightDate: LocalDate): Int = dataSource.transaction { c ->
     c.lockWrites()
     c.update(
-      """UPDATE event SET archived = true, revision = nextval('event_revision_seq')
+      """UPDATE event SET archived = true, archived_at = ?, revision = nextval('event_revision_seq')
            WHERE night_date < ? AND NOT archived""",
+      clock.now().ts(),
       nightDate.toJavaLocalDate(),
     )
+  }
+
+  /**
+   * Deletes events removed from the feed before [cutoff], with their listings, so the feed stops
+   * listing their removal; returns how many were deleted.
+   */
+  fun purgeRemovedBefore(cutoff: Instant): Int = dataSource.transaction { c ->
+    c.lockWrites()
+    c.update(
+      """DELETE FROM listing WHERE event_id IN (SELECT id FROM event WHERE archived AND archived_at < ?)""",
+      cutoff.ts(),
+    )
+    val revisions =
+      c.query(
+        "DELETE FROM event WHERE archived AND archived_at < ? RETURNING revision",
+        cutoff.ts(),
+      ) {
+        it.getLong(1)
+      }
+    revisions.maxOrNull()?.let { newest ->
+      c.update(
+        """INSERT INTO server_meta (key, value) VALUES (?, ?) ON CONFLICT (key)
+             DO UPDATE SET value = GREATEST(server_meta.value::bigint, EXCLUDED.value::bigint)::text""",
+        PURGED_THROUGH,
+        newest.toString(),
+      )
+    }
+    revisions.size
   }
 
   /** Listings of live events starting between now and [window] from now. */
@@ -314,6 +346,9 @@ class EventStore(private val dataSource: DataSource, private val clock: Clock = 
     query("SELECT pg_advisory_xact_lock(7271)") {}
   }
 }
+
+private const val EPOCH = "epoch"
+private const val PURGED_THROUGH = "purged_through"
 
 private fun Instant.ts(): Timestamp = Timestamp.from(toJavaInstant())
 

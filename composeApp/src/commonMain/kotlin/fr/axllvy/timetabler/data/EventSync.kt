@@ -1,6 +1,7 @@
 package fr.axllvy.timetabler.data
 
 import co.touchlab.kermit.Logger
+import fr.axllvy.timetabler.domain.Revision
 import fr.axllvy.timetabler.wire.WIRE_SCHEMA_VERSION
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,8 +38,8 @@ class EventSync(private val api: EventsApi, private val store: EventStoreLocal) 
 
   /**
    * Applies every feed page after the stored revision; concurrent calls run one after another.
-   * Events stored in another wire schema, or a page from a new server epoch, clear the store and
-   * start again from the first revision.
+   * Events stored in another wire schema, a page from a new server epoch, or a page saying removals
+   * after the stored revision were purged, clear the store and start again from the first revision.
    */
   suspend fun syncOnce(): SyncOutcome = running.withLock {
     _state.value = SyncState.SYNCING
@@ -47,11 +48,16 @@ class EventSync(private val api: EventsApi, private val store: EventStoreLocal) 
         startOver("Stored events use another wire schema")
       }
       while (true) {
-        val page = api.page(store.lastRevision())
+        val since = store.lastRevision()
+        val page = api.page(since)
         val epoch = store.epoch()
         if (epoch != null && epoch != page.epoch) {
           // The server database was restored or reseeded: its revisions no longer match ours.
           startOver("Server epoch changed")
+          continue
+        }
+        if (since > Revision.ZERO && since < page.purgedThrough) {
+          startOver("Removals newer than the stored revision were purged")
           continue
         }
         store.apply(page)

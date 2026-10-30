@@ -102,6 +102,74 @@ class EventSyncTest {
   }
 
   @Test
+  fun `a store behind a purged removal starts over`() = runTest {
+    store.apply(EventsPage(listOf(event("old", 7)), emptyList(), Revision(7), false))
+    val sync =
+      EventSync(
+        apiServing(
+          EventsPage(emptyList(), emptyList(), Revision(12), false, purgedThrough = Revision(9)),
+          EventsPage(
+            listOf(event("new", 12)),
+            emptyList(),
+            Revision(12),
+            false,
+            purgedThrough = Revision(9),
+          ),
+        ),
+        store,
+      )
+
+    sync.syncOnce() shouldBe SyncOutcome.Ok
+
+    sinces shouldContainExactly listOf("7", "0")
+    store.events().first().map { it.id.value } shouldContainExactly listOf("new")
+  }
+
+  @Test
+  fun `a store past every purged removal keeps syncing incrementally`() = runTest {
+    store.apply(EventsPage(listOf(event("a", 9)), emptyList(), Revision(9), false))
+    val sync =
+      EventSync(
+        apiServing(
+          EventsPage(
+            listOf(event("b", 12)),
+            emptyList(),
+            Revision(12),
+            false,
+            purgedThrough = Revision(9),
+          )
+        ),
+        store,
+      )
+
+    sync.syncOnce() shouldBe SyncOutcome.Ok
+
+    sinces shouldContainExactly listOf("9")
+    store.events().first().map { it.id.value }.sorted() shouldContainExactly listOf("a", "b")
+  }
+
+  @Test
+  fun `a fresh store ignores purged removals`() = runTest {
+    val sync =
+      EventSync(
+        apiServing(
+          EventsPage(
+            listOf(event("a", 12)),
+            emptyList(),
+            Revision(12),
+            false,
+            purgedThrough = Revision(9),
+          )
+        ),
+        store,
+      )
+
+    sync.syncOnce() shouldBe SyncOutcome.Ok
+
+    sinces shouldContainExactly listOf("0")
+  }
+
+  @Test
   fun `a stored schema older than the app starts the store over`() = runTest {
     store.apply(EventsPage(listOf(event("old", 7)), emptyList(), Revision(7), false))
     database.eventDao().setMeta(MetaEntity(EventDao.SCHEMA_VERSION, "0"))

@@ -12,6 +12,7 @@ import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 
@@ -152,6 +153,56 @@ class EventStoreTest {
     page.removed shouldContainExactly listOf(old)
     page.events.shouldBeEmpty()
     drain().map { it.first } shouldContainExactlyInAnyOrder listOf("Night new")
+  }
+
+  @Test
+  fun `a fresh client gets no removals older than the cutoff`() {
+    store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z")))
+    store.upsert(listing("new"))
+    store.archiveBefore(LocalDate(2026, 10, 29))
+
+    val purged = store.purgeRemovedBefore(now + 1.seconds)
+
+    purged shouldBe 1
+    val page = store.page(Revision.ZERO, 100)
+    page.removed.shouldBeEmpty()
+    page.events.map { it.title } shouldContainExactly listOf("Night new")
+  }
+
+  @Test
+  fun `removals newer than the cutoff stay in the feed`() {
+    val old = store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z"))).id
+    store.archiveBefore(LocalDate(2026, 10, 29))
+
+    val purged = store.purgeRemovedBefore(now)
+
+    purged shouldBe 0
+    store.page(Revision.ZERO, 100).removed shouldContainExactly listOf(old)
+  }
+
+  @Test
+  fun `the feed names the newest purged removal`() {
+    store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z")))
+    store.upsert(listing("new"))
+    store.page(Revision.ZERO, 100).purgedThrough shouldBe Revision.ZERO
+    store.archiveBefore(LocalDate(2026, 10, 29))
+    val removal = store.page(Revision.ZERO, 100).next
+
+    store.purgeRemovedBefore(now + 1.seconds)
+
+    store.page(Revision.ZERO, 100).purgedThrough shouldBe removal
+  }
+
+  @Test
+  fun `a purged event seen again comes back as a new event`() {
+    val old = store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z"))).id
+    store.archiveBefore(LocalDate(2026, 10, 29))
+    store.purgeRemovedBefore(now + 1.seconds)
+
+    val again = store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z")))
+
+    again.changed shouldBe true
+    (again.id == old) shouldBe false
   }
 
   @Test

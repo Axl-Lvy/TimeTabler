@@ -92,7 +92,8 @@ data class EventDto(
 /**
  * One page of the event feed: events changed after the requested revision, up to [next]. [epoch]
  * names the server database; revisions from another epoch mean nothing, so a client seeing a new
- * one starts over.
+ * one starts over. [purgedThrough] is the newest removal the feed no longer lists, so a client
+ * behind it may have missed one and starts over too.
  */
 @Serializable
 data class EventsPage(
@@ -101,6 +102,7 @@ data class EventsPage(
   val next: Revision,
   val hasMore: Boolean,
   val epoch: String = "",
+  val purgedThrough: Revision = Revision.ZERO,
 )
 
 /** JSON configuration shared by the server and every client for the event feed. */
