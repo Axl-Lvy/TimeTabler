@@ -50,6 +50,9 @@ ALTER TABLE listing ADD COLUMN IF NOT EXISTS lineup_checked_at timestamptz;
 ALTER TABLE event ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 UPDATE event SET archived_at = now() WHERE archived AND archived_at IS NULL;
 
+-- Set when a complete scrape of the listing's day no longer listed it; null while its source lists it.
+ALTER TABLE listing ADD COLUMN IF NOT EXISTS gone_at timestamptz;
+
 -- One row per server-wide setting. The epoch names this database: a restore or a reseed gets a new
 -- one (see the deployment notes), which tells clients to start over. 'purged_through' is the newest
 -- revision of a purged removal.

@@ -18,13 +18,15 @@ private const val DICE_HOST = "https://dice.fm"
 private const val PARIS_BROWSE = "$DICE_HOST/browse/paris-5b23e8a0e63cc224a4c36a2d"
 
 /**
- * Events of one DICE browse page; [overflow] means DICE had more than the page shows, and
- * [subGenreUrls] are the same page narrowed to each sub-genre.
+ * Events of one DICE browse page; [overflow] means DICE had more than the page shows,
+ * [subGenreUrls] are the same page narrowed to each sub-genre, and [skipped] counts events that
+ * could not be read.
  */
 data class DiceBrowsePage(
   val listings: List<ScrapedListing>,
   val overflow: Boolean,
   val subGenreUrls: List<String>,
+  val skipped: Int = 0,
 )
 
 /** Reads DICE browse pages from their embedded page data. */
@@ -40,14 +42,15 @@ object DiceBrowseParser {
     val props = Jsoup.parse(html).nextData()["props"]["pageProps"] ?: return null
     val events = props["events"] as? JsonArray ?: JsonArray(emptyList())
     val cursor = props["nextCursor"]
+    val listings = events.mapNotNull { event ->
+      runCatching { toListing(event) }
+        .onFailure { log.w { "Skipping DICE event ${event["id"].string}: ${it.message}" } }
+        .getOrNull()
+    }
     return DiceBrowsePage(
-      listings =
-        events.mapNotNull { event ->
-          runCatching { toListing(event) }
-            .onFailure { log.w { "Skipping DICE event ${event["id"].string}: ${it.message}" } }
-            .getOrNull()
-        },
+      listings = listings,
       overflow = cursor != null && cursor != JsonNull,
+      skipped = events.size - listings.size,
       subGenreUrls =
         (props["secondaryFilters"] as? JsonArray).orEmpty().mapNotNull {
           it["activateLink"].string?.let { link -> DICE_HOST + link }

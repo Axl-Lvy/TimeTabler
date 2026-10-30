@@ -266,6 +266,79 @@ class DiceScraperTest {
       .size shouldBe 5
   }
 
+  private suspend fun TestScope.scrapeDjDay(vararg pages: String): ScrapeReport {
+    var report: ScrapeReport? = null
+    for (html in pages) {
+      report = scraper { if (it.url.toString() == djDay) respond(html) else null }.scrapeAgenda()
+    }
+    return report!!
+  }
+
+  @Test
+  fun `a listing missing from a complete scrape disappears from the feed`() = runTest {
+    scrapeDjDay(browsePage(listOf("a1", "b1")))
+    val highest = store.page(Revision.ZERO, 1000).next
+
+    val report = scrapeDjDay(browsePage(listOf("a1")))
+
+    report.gone shouldBe 1
+    store.page(highest, 1000).removed.size shouldBe 1
+    storedTitles() shouldContainExactlyInAnyOrder listOf("Night a1")
+  }
+
+  @Test
+  fun `a failed scrape removes nothing`() = runTest {
+    scrapeDjDay(browsePage(listOf("a1", "b1")))
+    val laterParty = DiceBrowseParser.dayUrl("party", LocalDate(2026, 11, 8))
+
+    val report = scraper {
+      when (it.url.toString()) {
+        djDay -> respond(browsePage(listOf("a1")))
+        laterParty -> respondError(HttpStatusCode.TooManyRequests)
+        else -> null
+      }
+    }
+      .scrapeAgenda()
+
+    report.failed!! shouldContain "429"
+    report.gone shouldBe 0
+    storedTitles() shouldContainExactlyInAnyOrder listOf("Night a1", "Night b1")
+    store.page(Revision.ZERO, 1000).removed.shouldBeEmpty()
+  }
+
+  @Test
+  fun `a day that overflows without sub-genres removes nothing`() = runTest {
+    scrapeDjDay(browsePage(listOf("a1", "b1")))
+
+    val report = scrapeDjDay(browsePage(listOf("a1"), overflow = true))
+
+    report.gone shouldBe 0
+    storedTitles() shouldContainExactlyInAnyOrder listOf("Night a1", "Night b1")
+  }
+
+  @Test
+  fun `a day with an unreadable event removes nothing`() = runTest {
+    scrapeDjDay(browsePage(listOf("a1", "b1")))
+    val withBroken =
+      browsePage(listOf("a1")).replace("\"events\":[", "\"events\":[{\"id\":\"b1\"},")
+
+    val report = scrapeDjDay(withBroken)
+
+    report.gone shouldBe 0
+    storedTitles() shouldContainExactlyInAnyOrder listOf("Night a1", "Night b1")
+  }
+
+  @Test
+  fun `a scrape that sees no event at all removes nothing`() = runTest {
+    scrapeDjDay(browsePage(listOf("a1", "b1")))
+
+    val report = scrapeDjDay(emptyDay)
+
+    report.failed.shouldBeNull()
+    report.gone shouldBe 0
+    storedTitles() shouldContainExactlyInAnyOrder listOf("Night a1", "Night b1")
+  }
+
   @Test
   fun `refresh fetches only events starting in the next two days`() = runTest {
     scraper().scrapeAgenda()

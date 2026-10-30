@@ -83,4 +83,24 @@ class SyncE2eTest {
     outcome shouldBe SyncOutcome.Ok
     local.events().first().map { it.title }.sorted() shouldBe listOf("Night added", "Night kept")
   }
+
+  @Test
+  fun `a listing gone from its source disappears from the client`(): Unit = runBlocking {
+    server.store.upsert(listing("kept", Instant.parse("2026-11-05T22:00:00Z")))
+    server.store.upsert(listing("gone", Instant.parse("2026-11-05T23:00:00Z")))
+    val local = RoomEventStore(buildDatabase(Room.inMemoryDatabaseBuilder<TimeTablerDatabase>()))
+    val sync = EventSync(EventsApi(HttpClient(CIO), server.baseUrl), local)
+    sync.syncOnce()
+    server.store.markGone(
+      Source.DICE,
+      setOf("kept"),
+      setOf(LocalDate(2026, 11, 5), LocalDate(2026, 11, 6)),
+      startingFrom = Instant.parse("2026-01-01T00:00:00Z"),
+    )
+
+    val outcome = sync.syncOnce()
+
+    outcome shouldBe SyncOutcome.Ok
+    local.events().first().map { it.title } shouldBe listOf("Night kept")
+  }
 }

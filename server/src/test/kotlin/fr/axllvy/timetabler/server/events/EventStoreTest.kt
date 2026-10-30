@@ -23,7 +23,8 @@ class EventStoreTest {
     object : Clock {
       override fun now() = now
     }
-  private val store = EventStore(PostgresTestDb.freshDataSource(), clock)
+  private val dataSource = PostgresTestDb.freshDataSource()
+  private val store = EventStore(dataSource, clock)
 
   private fun listing(
     id: String,
@@ -203,6 +204,85 @@ class EventStoreTest {
 
     again.changed shouldBe true
     (again.id == old) shouldBe false
+  }
+
+  @Test
+  fun `a listing missing from a covered day is gone from the feed`() {
+    store.upsert(listing("kept"))
+    val gone = store.upsert(listing("gone")).id
+    val highest = store.page(Revision.ZERO, 100).next
+
+    val marked = store.markGone(Source.DICE, setOf("kept"), setOf(LocalDate(2026, 10, 30)), now)
+
+    marked shouldBe 1
+    store.page(highest, 100).removed shouldContainExactly listOf(gone)
+    store.page(Revision.ZERO, 100).events.map { it.title } shouldContainExactly listOf("Night kept")
+  }
+
+  @Test
+  fun `listings on days the run did not cover stay`() {
+    store.upsert(listing("later", startsAt = Instant.parse("2026-11-02T22:00:00Z")))
+
+    val marked = store.markGone(Source.DICE, emptySet(), setOf(LocalDate(2026, 10, 30)), now)
+
+    marked shouldBe 0
+    store.page(Revision.ZERO, 100).events.map { it.title } shouldContainExactly
+      listOf("Night later")
+  }
+
+  @Test
+  fun `a listing that already started stays`() {
+    store.upsert(listing("started", startsAt = now - 1.hours))
+
+    val marked = store.markGone(Source.DICE, emptySet(), setOf(LocalDate(2026, 10, 30)), now)
+
+    marked shouldBe 0
+    store.page(Revision.ZERO, 100).events.map { it.title } shouldContainExactly
+      listOf("Night started")
+  }
+
+  @Test
+  fun `a gone listing seen again brings its event back`() {
+    val id = store.upsert(listing("back")).id
+    store.markGone(Source.DICE, emptySet(), setOf(LocalDate(2026, 10, 30)), now)
+    val highest = store.page(Revision.ZERO, 100).next
+
+    val again = store.upsert(listing("back"))
+
+    again.changed shouldBe true
+    store.page(highest, 100).events.map { it.id } shouldContainExactly listOf(id)
+    store.page(Revision.ZERO, 100).removed.shouldBeEmpty()
+  }
+
+  @Test
+  fun `an event keeps its other listings when one is gone`() {
+    val id = store.upsert(listing("a")).id
+    dataSource.connection.use { c ->
+      c.createStatement()
+        .execute(
+          """INSERT INTO listing (id, event_id, source, external_id, url, raw_title, starts_at, status,
+             content_hash, last_seen_at)
+           SELECT gen_random_uuid(), event_id, 'SHOTGUN', 'sg', 'https://shotgun.live/fr/events/sg',
+             raw_title, starts_at, 'ON_SALE', 'x', last_seen_at FROM listing WHERE external_id = 'a'"""
+        )
+    }
+    val highest = store.page(Revision.ZERO, 100).next
+
+    store.markGone(Source.DICE, emptySet(), setOf(LocalDate(2026, 10, 30)), now)
+
+    val event = store.page(highest, 100).events.single()
+    event.id shouldBe id
+    event.listings.map { it.source } shouldContainExactly listOf(Source.SHOTGUN)
+  }
+
+  @Test
+  fun `gone listings are not refreshed`() {
+    store.upsert(listing("gone", startsAt = now + 20.hours))
+    store.markGone(Source.DICE, emptySet(), setOf(LocalDate(2026, 10, 31)), now)
+
+    val refs = store.listingsStartingWithin(48.hours) + store.listingsNeedingLineup()
+
+    refs.shouldBeEmpty()
   }
 
   @Test

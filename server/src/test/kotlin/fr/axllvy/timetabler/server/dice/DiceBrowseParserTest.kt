@@ -46,6 +46,7 @@ class DiceBrowseParserTest {
 
     page.listings shouldHaveSize 4
     page.listings.map { it.externalId } shouldNotContain "6ae30f3eff6a4e000149d810"
+    page.skipped shouldBe 1
   }
 
   @Test
