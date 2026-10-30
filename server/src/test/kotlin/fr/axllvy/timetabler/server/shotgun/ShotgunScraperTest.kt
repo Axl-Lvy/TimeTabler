@@ -36,6 +36,7 @@ class ShotgunScraperTest {
       "a" to "2026-11-07T22:00:00.000Z",
       "b" to "2026-11-08T22:00:00.000Z",
       "c" to "2026-11-10T22:00:00.000Z",
+      "d" to "2026-11-10T20:00:00.000Z",
     )
 
   @AfterTest
@@ -203,10 +204,36 @@ class ShotgunScraperTest {
 
   @Test
   fun `an event on the last day the agenda reached is kept`() = runTest {
+    ShotgunScraper(browser(listOf("a", "c", "d")), store, clock).scrapeAgenda()
+
+    val report = ShotgunScraper(browser(listOf("a", "c")), store, clock).scrapeAgenda()
+
+    report.gone shouldBe 0
+    report.lastDay shouldBe LocalDate(2026, 11, 9)
+    store.page(Revision.ZERO, 100).removed.shouldBeEmpty()
+  }
+
+  @Test
+  fun `an event after the last day the agenda reached is kept`() = runTest {
     ShotgunScraper(browser(listOf("a", "b")), store, clock).scrapeAgenda()
 
     val report = ShotgunScraper(browser(listOf("a")), store, clock).scrapeAgenda()
 
+    report.gone shouldBe 0
+    store.page(Revision.ZERO, 100).removed.shouldBeEmpty()
+  }
+
+  @Test
+  fun `a throttled run marks nothing gone`() = runTest {
+    ShotgunScraper(browser(listOf("a", "b", "c")), store, clock).scrapeAgenda()
+    val browser =
+      browser(listOf("c", "a")) {
+        if (it == url("a")) FetchResult.Failed(429, "Too Many Requests") else null
+      }
+
+    val report = ShotgunScraper(browser, store, clock).scrapeAgenda()
+
+    report.failed!! shouldContain "429"
     report.gone shouldBe 0
     store.page(Revision.ZERO, 100).removed.shouldBeEmpty()
   }
