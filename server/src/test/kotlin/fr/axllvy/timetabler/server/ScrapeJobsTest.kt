@@ -8,6 +8,9 @@ import fr.axllvy.timetabler.server.http.PoliteFetcher
 import fr.axllvy.timetabler.wire.ListingStatus
 import fr.axllvy.timetabler.wire.Source
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respondError
@@ -67,6 +70,17 @@ class ScrapeJobsTest {
     jobs.agenda()
 
     store.page(Revision.ZERO, 100).removed shouldContainExactly listOf(old)
+  }
+
+  @Test
+  fun `a failed agenda is recorded with no success`() = runTest {
+    throttledJobs().agenda()
+
+    val run = store.scrapeRuns().getValue("agenda")
+    run.lastAttemptAt shouldBe clock.now()
+    run.lastSuccessAt.shouldBeNull()
+    run.consecutiveFailures shouldBe 1
+    run.failure!! shouldContain "429"
   }
 
   @Test

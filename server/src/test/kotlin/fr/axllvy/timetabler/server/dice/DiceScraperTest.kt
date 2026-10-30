@@ -93,6 +93,8 @@ class DiceScraperTest {
     report.upserted shouldBe 5
     report.pages shouldBe 61 * DICE_CATEGORIES.size
     report.lineups shouldBe 5
+    report.listings shouldBe 5
+    report.lastDay shouldBe LocalDate(2027, 1, 6)
     storedTitles().size shouldBe 5
     store.page(Revision.ZERO, 1000).events.single { it.title.startsWith("Baron") }.lineup shouldBe
       listOf("Baron Von Trax", "Cattoni", "Gray", "MaaxD", "VolviK")
@@ -168,6 +170,7 @@ class DiceScraperTest {
       .scrapeAgenda()
 
     report.failed!! shouldContain "429"
+    report.lastDay.shouldBeNull()
     storedTitles().size shouldBe 5
     requested.filter { "/event/" in it }.shouldBeEmpty()
     store.page(Revision.ZERO, 1000).removed.shouldBeEmpty()
@@ -193,7 +196,7 @@ class DiceScraperTest {
     }
       .scrapeAgenda()
 
-    report.failed.shouldBeNull()
+    report.failed!! shouldContain "429"
     requested.count { "/event/" in it } shouldBe 1
   }
 
@@ -291,5 +294,18 @@ class DiceScraperTest {
         "6ac7bec70dbdde000190897f",
         "6ab11603d53a780001f34604",
       )
+  }
+
+  @Test
+  fun `a throttled refresh reports the failure`() = runTest {
+    scraper().scrapeAgenda()
+
+    val report = scraper {
+      if ("/event/" in it.url.toString()) respondError(HttpStatusCode.TooManyRequests) else null
+    }
+      .refreshSoon()
+
+    report.failed!! shouldContain "429"
+    report.lineups shouldBe 0
   }
 }

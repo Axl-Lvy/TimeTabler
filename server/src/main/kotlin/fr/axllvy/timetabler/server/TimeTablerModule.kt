@@ -34,7 +34,7 @@ fun Application.timeTablerModule(store: EventStore, posters: PosterCache, static
     }
   )
   routing {
-    healthRoute()
+    healthRoute(store)
     eventRoutes(store)
     posterRoutes(store, posters)
     staticDir?.let { staticFrontendRoutes(it) }

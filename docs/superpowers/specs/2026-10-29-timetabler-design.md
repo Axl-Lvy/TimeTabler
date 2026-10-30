@@ -159,7 +159,7 @@ Available in the app only when the logged-in account has the admin role. It lets
 - `GET /v1/events?since=<revision>&limit=`: pages of events, listings, lineups and timetables changed since a server-assigned revision, ordered by revision, plus tombstones for events that left the window or were merged. Read-only for clients.
 - `GET /v1/posters/{id}`: poster images, fetched from DICE or Shotgun once, resized and cached by the server.
 - Admin routes: upload a screenshot, read extraction status, edit a timetable, merge and split events.
-- `GET /health`.
+- `GET /health`: always 200 while the server runs, with the last run of each scrape job (attempt and success times, failures in a row, pages, listings, upserts, lineups, last agenda day) as JSON for the home-lab exporter.
 
 ### Clients
 

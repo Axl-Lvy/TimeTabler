@@ -5,6 +5,7 @@ import fr.axllvy.timetabler.domain.Revision
 import fr.axllvy.timetabler.domain.nightDateOf
 import fr.axllvy.timetabler.domain.normalizeText
 import fr.axllvy.timetabler.server.db.transaction
+import fr.axllvy.timetabler.server.health.ScrapeRun
 import fr.axllvy.timetabler.wire.EventDto
 import fr.axllvy.timetabler.wire.EventsPage
 import fr.axllvy.timetabler.wire.ListingDto
@@ -25,6 +26,7 @@ import kotlin.time.toKotlinInstant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.toJavaLocalDate
 import kotlinx.datetime.toKotlinLocalDate
+import kotlinx.serialization.json.Json
 
 /** Identity of one source listing, enough to fetch and update it. */
 data class ListingRef(val source: Source, val externalId: String, val url: String)
@@ -212,6 +214,35 @@ class EventStore(private val dataSource: DataSource, private val clock: Clock = 
     }
   }
 
+  /** Replaces the last run of scrape [job] with [update] applied to it, null before the first. */
+  suspend fun updateScrapeRun(job: String, update: (ScrapeRun?) -> ScrapeRun) {
+    dataSource.transaction { c ->
+      val key = "$SCRAPE_KEY_PREFIX$job"
+      val previous =
+        c.query("SELECT value FROM server_meta WHERE key = ? FOR UPDATE", key) { it.getString(1) }
+          .firstOrNull()
+          ?.let { META_JSON.decodeFromString(ScrapeRun.serializer(), it) }
+      c.update(
+        """INSERT INTO server_meta (key, value) VALUES (?, ?)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value""",
+        key,
+        META_JSON.encodeToString(ScrapeRun.serializer(), update(previous)),
+      )
+    }
+  }
+
+  /** The last run of every scrape job that has run, by job name. */
+  suspend fun scrapeRuns(): Map<String, ScrapeRun> = dataSource.transaction { c ->
+    c.query(
+        "SELECT key, value FROM server_meta WHERE key LIKE ? ORDER BY key",
+        "$SCRAPE_KEY_PREFIX%",
+      ) {
+        it.getString(1).removePrefix(SCRAPE_KEY_PREFIX) to
+          META_JSON.decodeFromString(ScrapeRun.serializer(), it.getString(2))
+      }
+      .toMap()
+  }
+
   /** Whether no event has been stored yet. */
   suspend fun isEmpty(): Boolean = dataSource.transaction { c ->
     c.query("SELECT 1 FROM event LIMIT 1") { true }.isEmpty()
@@ -315,6 +346,10 @@ class EventStore(private val dataSource: DataSource, private val clock: Clock = 
     query("SELECT pg_advisory_xact_lock(7271)") {}
   }
 }
+
+private const val SCRAPE_KEY_PREFIX = "scrape."
+
+private val META_JSON = Json { ignoreUnknownKeys = true }
 
 private fun Instant.ts(): Timestamp = Timestamp.from(toJavaInstant())
 
