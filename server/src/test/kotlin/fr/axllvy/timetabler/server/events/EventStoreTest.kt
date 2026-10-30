@@ -14,6 +14,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
@@ -161,6 +162,143 @@ class EventStoreTest {
     page.removed shouldContainExactly listOf(old)
     page.events.shouldBeEmpty()
     drain().map { it.first } shouldContainExactlyInAnyOrder listOf("Night new")
+  }
+
+  @Test
+  fun `a fresh client gets no removals older than the cutoff`() = runTest {
+    store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z")))
+    store.upsert(listing("new"))
+    store.archiveBefore(LocalDate(2026, 10, 29))
+
+    val purged = store.purgeRemovedBefore(now + 1.seconds)
+
+    purged shouldBe 1
+    val page = store.page(Revision.ZERO, 100)
+    page.removed.shouldBeEmpty()
+    page.events.map { it.title } shouldContainExactly listOf("Night new")
+  }
+
+  @Test
+  fun `removals newer than the cutoff stay in the feed`() = runTest {
+    val old = store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z"))).id
+    store.archiveBefore(LocalDate(2026, 10, 29))
+
+    val purged = store.purgeRemovedBefore(now)
+
+    purged shouldBe 0
+    store.page(Revision.ZERO, 100).removed shouldContainExactly listOf(old)
+  }
+
+  @Test
+  fun `a feed with nothing purged names no purged removal`() = runTest {
+    store.upsert(listing("new"))
+
+    val page = store.page(Revision.ZERO, 100)
+
+    page.purgedThrough shouldBe Revision.ZERO
+  }
+
+  @Test
+  fun `the feed names the newest purged removal`() = runTest {
+    store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z")))
+    store.upsert(listing("new"))
+    store.archiveBefore(LocalDate(2026, 10, 29))
+    val removal = store.page(Revision.ZERO, 100).next
+
+    store.purgeRemovedBefore(now + 1.seconds)
+
+    store.page(Revision.ZERO, 100).purgedThrough shouldBe removal
+  }
+
+  @Test
+  fun `a purged event seen again comes back as a new event`() = runTest {
+    val old = store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z"))).id
+    store.archiveBefore(LocalDate(2026, 10, 29))
+    store.purgeRemovedBefore(now + 1.seconds)
+
+    val again = store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z")))
+
+    again.changed shouldBe true
+    (again.id == old) shouldBe false
+  }
+
+  @Test
+  fun `a listing missing from a covered day is gone from the feed`() = runTest {
+    store.upsert(listing("kept"))
+    val gone = store.upsert(listing("gone")).id
+    val highest = store.page(Revision.ZERO, 100).next
+
+    val marked = store.markGone(Source.DICE, setOf("kept"), setOf(LocalDate(2026, 10, 30)), now)
+
+    marked shouldBe 1
+    store.page(highest, 100).removed shouldContainExactly listOf(gone)
+    store.page(Revision.ZERO, 100).events.map { it.title } shouldContainExactly listOf("Night kept")
+  }
+
+  @Test
+  fun `listings on days the run did not cover stay`() = runTest {
+    store.upsert(listing("later", startsAt = Instant.parse("2026-11-02T22:00:00Z")))
+
+    val marked = store.markGone(Source.DICE, emptySet(), setOf(LocalDate(2026, 10, 30)), now)
+
+    marked shouldBe 0
+    store.page(Revision.ZERO, 100).events.map { it.title } shouldContainExactly
+      listOf("Night later")
+  }
+
+  @Test
+  fun `a listing that already started stays`() = runTest {
+    store.upsert(listing("started", startsAt = now - 1.hours))
+
+    val marked = store.markGone(Source.DICE, emptySet(), setOf(LocalDate(2026, 10, 30)), now)
+
+    marked shouldBe 0
+    store.page(Revision.ZERO, 100).events.map { it.title } shouldContainExactly
+      listOf("Night started")
+  }
+
+  @Test
+  fun `a gone listing seen again brings its event back`() = runTest {
+    val id = store.upsert(listing("back")).id
+    store.markGone(Source.DICE, emptySet(), setOf(LocalDate(2026, 10, 30)), now)
+    val highest = store.page(Revision.ZERO, 100).next
+
+    val again = store.upsert(listing("back"))
+
+    again.changed shouldBe true
+    store.page(highest, 100).events.map { it.id } shouldContainExactly listOf(id)
+    store.page(Revision.ZERO, 100).removed.shouldBeEmpty()
+  }
+
+  @Test
+  fun `an event keeps its other listings when one is gone`() = runTest {
+    val id = store.upsert(listing("a")).id
+    db.connection.use { c ->
+      c.createStatement()
+        .execute(
+          """INSERT INTO listing (id, event_id, source, external_id, url, raw_title, starts_at, status,
+             content_hash, last_seen_at)
+           SELECT gen_random_uuid(), event_id, 'SHOTGUN', 'sg', 'https://shotgun.live/fr/events/sg',
+             raw_title, starts_at, 'ON_SALE', 'x', last_seen_at FROM listing WHERE external_id = 'a'"""
+        )
+    }
+    val highest = store.page(Revision.ZERO, 100).next
+
+    store.markGone(Source.DICE, emptySet(), setOf(LocalDate(2026, 10, 30)), now)
+
+    val event = store.page(highest, 100).events.single()
+    event.id shouldBe id
+    event.listings.map { it.source } shouldContainExactly listOf(Source.SHOTGUN)
+  }
+
+  @Test
+  fun `gone listings are not refreshed`() = runTest {
+    store.upsert(listing("gone", startsAt = now + 20.hours))
+    store.markGone(Source.DICE, emptySet(), setOf(LocalDate(2026, 10, 31)), now)
+
+    val refs = store.listingsStartingWithin(48.hours) + store.listingsNeedingLineup()
+
+    refs.shouldBeEmpty()
   }
 
   @Test

@@ -26,7 +26,8 @@ ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75"
 ENV TT_STATIC_DIR="/app/www"
 ENV TT_POSTER_DIR="/data/posters"
 
-# Everything else comes from the environment: TT_DB_URL, TT_DB_USER, TT_DB_PASSWORD, optional TT_PORT.
+# Everything else comes from the environment: TT_DB_URL, TT_DB_USER, TT_DB_PASSWORD, optional TT_PORT
+# and TT_REMOVAL_RETENTION (how long removed events stay in the feed, such as 30d).
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s CMD wget -qO- http://localhost:8080/health || exit 1
 ENTRYPOINT ["/app/bin/server"]

@@ -53,4 +53,28 @@ class EventsWireTest {
     WIRE_JSON.decodeFromString(EventsPage.serializer(), json) shouldBe
       EventsPage(emptyList(), emptyList(), Revision(3), true)
   }
+
+  @Test
+  fun `an unknown listing status decodes as unknown`() {
+    val json = """{"source":"DICE","url":"https://dice.fm/event/x","status":"POSTPONED"}"""
+
+    WIRE_JSON.decodeFromString(ListingDto.serializer(), json) shouldBe
+      ListingDto(Source.DICE, "https://dice.fm/event/x", ListingStatus.UNKNOWN)
+  }
+
+  @Test
+  fun `an unknown source decodes as unknown`() {
+    val json = """{"source":"RESIDENT_ADVISOR","url":"https://ra.co/events/1","status":"ON_SALE"}"""
+
+    WIRE_JSON.decodeFromString(ListingDto.serializer(), json) shouldBe
+      ListingDto(Source.UNKNOWN, "https://ra.co/events/1", ListingStatus.ON_SALE)
+  }
+
+  @Test
+  fun `known enum values keep their wire names`() {
+    val dto = ListingDto(Source.SHOTGUN, "https://shotgun.live/x", ListingStatus.SOLD_OUT)
+
+    WIRE_JSON.encodeToString(ListingDto.serializer(), dto) shouldBe
+      """{"source":"SHOTGUN","url":"https://shotgun.live/x","status":"SOLD_OUT"}"""
+  }
 }

@@ -29,11 +29,13 @@ interface EventDao {
     removed: List<String>,
     revision: Long,
     epoch: String,
+    schemaVersion: Int,
   ) {
     upsertAll(events)
     if (removed.isNotEmpty()) deleteAll(removed)
     setMeta(MetaEntity(LAST_REVISION, revision.toString()))
     setMeta(MetaEntity(EPOCH, epoch))
+    setMeta(MetaEntity(SCHEMA_VERSION, schemaVersion.toString()))
   }
 
   @Query("DELETE FROM event") suspend fun deleteAllEvents()
@@ -53,5 +55,8 @@ interface EventDao {
 
     /** Meta key holding the server epoch of the stored events. */
     const val EPOCH = "epoch"
+
+    /** Meta key holding the wire schema version of the stored events. */
+    const val SCHEMA_VERSION = "schemaVersion"
   }
 }

@@ -32,7 +32,11 @@ fun main() {
   val scrapeRuns = ScrapeRuns(store)
   embeddedServer(Netty, port = config.port) {
       timeTablerModule(store, posters, scrapeRuns, config.staticDir)
-      schedulingModule(ScrapeJobs(scraper, store, posters, scrapeRuns), scrapeRuns, store)
+      schedulingModule(
+        ScrapeJobs(scraper, store, posters, scrapeRuns, config.removalRetention),
+        scrapeRuns,
+        store,
+      )
     }
     .start(wait = true)
 }

@@ -9,6 +9,7 @@ import fr.axllvy.timetabler.server.health.ScrapeRuns
 import fr.axllvy.timetabler.server.posters.PosterCache
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -25,13 +26,17 @@ class ScrapeJobs(
   private val store: EventStore,
   private val posters: PosterCache,
   private val runs: ScrapeRuns,
+  private val removalRetention: Duration,
   private val clock: Clock = Clock.System,
 ) {
 
   private val log = Logger.withTag("ScrapeJobs")
   private val oneAtATime = Mutex()
 
-  /** Scrapes the DICE agenda, then archives the events of nights before yesterday. */
+  /**
+   * Scrapes the DICE agenda, archives the events of nights before yesterday, then purges removals
+   * older than [removalRetention].
+   */
   suspend fun agenda() =
     run(AGENDA) {
       val report = scraper.scrapeAgenda()
@@ -39,6 +44,8 @@ class ScrapeJobs(
       // never drops an event the failed scrape would have kept.
       val yesterday = clock.now().toLocalDateTime(PARIS).date.minus(DatePeriod(days = 1))
       log.i { "Archived ${store.archiveBefore(yesterday)} past events" }
+      val purged = store.purgeRemovedBefore(clock.now() - removalRetention)
+      log.i { "Purged $purged removals older than $removalRetention" }
       report
     }
 

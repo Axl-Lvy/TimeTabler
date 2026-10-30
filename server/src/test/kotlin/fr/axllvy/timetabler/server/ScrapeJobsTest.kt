@@ -26,6 +26,7 @@ import kotlin.io.path.listDirectoryEntries
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -74,6 +75,7 @@ class ScrapeJobsTest {
       store,
       PosterCache(posterDir, fetcher),
       runs,
+      30.days,
       clock,
     )
   }
