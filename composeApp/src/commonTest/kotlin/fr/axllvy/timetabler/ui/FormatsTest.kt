@@ -10,11 +10,22 @@ import kotlinx.datetime.LocalDate
 
 class FormatsTest {
 
+  private val english =
+    DateNames(
+      days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"),
+      months =
+        listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"),
+    )
+
   @Test
-  fun `labels tonight and other nights`() {
-    nightLabel(LocalDate(2026, 10, 30), tonight = LocalDate(2026, 10, 30)) shouldBe
-      "Tonight · Fri 30 Oct"
-    nightLabel(LocalDate(2026, 10, 31), tonight = LocalDate(2026, 10, 30)) shouldBe "Sat 31 Oct"
+  fun `formats a date with the given names`() {
+    shortDate(LocalDate(2026, 10, 30), english) shouldBe "Fri 30 Oct"
+    shortDate(LocalDate(2026, 3, 1), english) shouldBe "Sun 1 Mar"
+  }
+
+  @Test
+  fun `formats a date without names while they load`() {
+    shortDate(LocalDate(2026, 10, 30), DateNames(emptyList(), emptyList())) shouldBe "30"
   }
 
   @Test
@@ -35,11 +46,11 @@ class FormatsTest {
 
   @Test
   fun `badges a cancelled or sold out event`() {
-    eventBadge(listOf(listing(ListingStatus.CANCELLED))) shouldBe "cancelled"
+    eventBadge(listOf(listing(ListingStatus.CANCELLED))) shouldBe EventBadge.CANCELLED
     eventBadge(listOf(listing(ListingStatus.SOLD_OUT), listing(ListingStatus.CANCELLED))) shouldBe
-      "sold out"
+      EventBadge.SOLD_OUT
     eventBadge(listOf(listing(ListingStatus.SOLD_OUT), listing(ListingStatus.ON_SALE))) shouldBe
-      "lineup"
-    eventBadge(emptyList()) shouldBe "lineup"
+      EventBadge.LINEUP
+    eventBadge(emptyList()) shouldBe EventBadge.LINEUP
   }
 }

@@ -28,6 +28,7 @@ import fr.axllvy.timetabler.ui.eventBadge
 import fr.axllvy.timetabler.ui.headliners
 import fr.axllvy.timetabler.ui.hours
 import fr.axllvy.timetabler.wire.EventDto
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * One event of the list: poster, title, venue and hours, first artists, and its timetable status.
@@ -51,7 +52,7 @@ fun EventCard(event: EventDto, onClick: () -> Unit, modifier: Modifier = Modifie
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
           )
-          Badge(eventBadge(event.listings))
+          Badge(stringResource(eventBadge(event.listings).label))
         }
         Text(
           "${event.venue.name} · ${hours(event.startsAt, event.endsAt)}",

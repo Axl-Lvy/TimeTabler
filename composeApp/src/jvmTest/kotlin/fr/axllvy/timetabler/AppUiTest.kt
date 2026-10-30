@@ -35,6 +35,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.headersOf
 import java.io.IOException
+import java.util.Locale
 import kotlin.test.Test
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
@@ -115,6 +116,32 @@ class AppUiTest {
     onNodeWithText("I Hate Models").assertExists()
     onNodeWithText("Narciss").assertExists()
     onNodeWithText("No set times yet", substring = true).assertExists()
+  }
+
+  @Test
+  fun `the app follows a french device`() {
+    val default = Locale.getDefault()
+    Locale.setDefault(Locale.FRENCH)
+    try {
+      runComposeUiTest {
+        storePage(listOf(possession()))
+        setContent { App(testModules) }
+
+        waitUntil("Possession shown", timeoutMillis = 5_000) {
+          onAllNodesWithText("Possession").fetchSemanticsNodes().isNotEmpty()
+        }
+        onNodeWithText("Ce soir").assertExists()
+        onNodeWithText("Ce week-end").assertExists()
+        onNodeWithText("Possession").performClick()
+
+        waitUntil("Billets sur DICE shown", timeoutMillis = 5_000) {
+          onAllNodesWithText("Billets sur DICE").fetchSemanticsNodes().isNotEmpty()
+        }
+        onNodeWithText("Pas encore d'horaires", substring = true).assertExists()
+      }
+    } finally {
+      Locale.setDefault(default)
+    }
   }
 
   private fun storeOneEvent(title: String) = runBlocking {
