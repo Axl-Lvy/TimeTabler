@@ -36,9 +36,8 @@ class PosterPrefetcher(
   private val running = Mutex()
 
   /**
-   * Downloads the uncached posters of [events] starting within [POSTER_PREFETCH_WINDOW], one at a
-   * time, and returns how many were downloaded. Failed posters are skipped, and a call made while
-   * another runs does nothing.
+   * Downloads the uncached posters of [events] starting within [POSTER_PREFETCH_WINDOW] and returns
+   * how many it got. Failed posters are skipped; a call made while another runs does nothing.
    */
   suspend fun prefetch(events: List<EventDto>): Int {
     if (!running.tryLock()) return 0
