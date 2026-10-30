@@ -10,12 +10,11 @@ class RoutesTest {
   @Test
   fun `an event page shows its event`() {
     eventIdOfWebPath("/event/abc") shouldBe EventId("abc")
-    eventIdOfWebPath("/event/abc/") shouldBe EventId("abc")
   }
 
   @Test
   fun `other pages show no event`() {
-    for (path in listOf("/", "", "/event", "/event/", "/event/a/b", "/events/abc")) {
+    for (path in listOf("/", "", "/event", "/event/", "/event/abc/", "/event/a/b", "/events/abc")) {
       eventIdOfWebPath(path).shouldBeNull()
     }
   }

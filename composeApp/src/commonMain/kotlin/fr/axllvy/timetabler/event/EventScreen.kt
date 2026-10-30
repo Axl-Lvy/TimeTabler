@@ -50,8 +50,8 @@ import org.koin.compose.koinInject
 private class Stored(val event: EventDto?)
 
 /**
- * One event: poster, date and venue, ticket links, and its lineup; "Event not found" once the store
- * is known not to have it.
+ * One event: poster, date and venue, ticket links, and its lineup; "Event not found" once a sync
+ * finished without it, an offline hint while the server is unreachable.
  */
 @Composable
 fun EventScreen(id: EventId, onBack: () -> Unit) {
@@ -69,10 +69,11 @@ fun EventScreen(id: EventId, onBack: () -> Unit) {
     val event = stored?.event
     when {
       event != null -> EventDetails(event)
-      stored == null || syncState == SyncState.SYNCING -> Unit
-      hasEverSynced == true -> Message("Event not found")
-      hasEverSynced == false && syncState == SyncState.OFFLINE ->
-        Message("Connect once to load events")
+      stored == null || hasEverSynced == null -> Unit
+      syncState == SyncState.IDLE && hasEverSynced == true -> Message("Event not found")
+      syncState == SyncState.OFFLINE && hasEverSynced == true ->
+        Message("Not in your offline copy. Connect to check.")
+      syncState == SyncState.OFFLINE -> Message("Connect once to load events")
     }
   }
 }

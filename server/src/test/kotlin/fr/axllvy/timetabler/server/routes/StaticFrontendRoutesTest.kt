@@ -70,4 +70,17 @@ class StaticFrontendRoutesTest {
   fun `a missing file is not answered with the app shell`() = app {
     client.get("/composeApp.ffffffffffffffffffff.js").status shouldBe HttpStatusCode.NotFound
   }
+
+  @Test
+  fun `a path under event that is not an event id is not answered with the app shell`() = app {
+    for (path in
+      listOf(
+        "/event/composeApp.0123456789abcdef0123.js",
+        "/event/sw.js",
+        "/event/not-an-id",
+        "/event/3f6c2a5e-1b2d-4c8e-9a7f-0e1d2c3b4a59/",
+      )) {
+      client.get(path).status shouldBe HttpStatusCode.NotFound
+    }
+  }
 }

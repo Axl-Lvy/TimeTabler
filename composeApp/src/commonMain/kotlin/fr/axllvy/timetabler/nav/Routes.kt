@@ -8,7 +8,7 @@ const val EVENTS_ROUTE = "events"
 /** Navigation route pattern of one event, with its id as the `id` argument. */
 const val EVENT_ROUTE = "event/{id}"
 
-private val EVENT_WEB_PATH = Regex("/event/([^/]+)/?")
+private val EVENT_WEB_PATH = Regex("/event/([^/]+)")
 
 /** Navigation route showing [id]. */
 fun eventRoute(id: EventId): String = "event/${id.value}"

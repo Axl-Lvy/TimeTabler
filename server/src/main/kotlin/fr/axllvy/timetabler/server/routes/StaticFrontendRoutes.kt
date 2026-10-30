@@ -18,9 +18,11 @@ private val HASHED_ASSET_PATTERN = Regex("""(composeApp|styles)\.[0-9a-f]{20}\.(
 
 /**
  * Client-side pages of the web app, answered with its shell so a reload or a shared link works;
- * must keep matching `eventWebPath` in `composeApp`.
+ * must keep matching `eventWebPath` in `composeApp`. Event ids are lowercase UUIDs, so bundle files
+ * resolved under `/event/` stay a 404 instead of the shell.
  */
-private val APP_PAGES = listOf("/event/{id}")
+private val APP_PAGES =
+  listOf(Regex("""/event/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"""))
 
 /**
  * Serves the web bundle at `/` and its shell at every app page: hashed files are cached for a year,
