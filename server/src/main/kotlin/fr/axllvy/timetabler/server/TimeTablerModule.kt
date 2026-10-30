@@ -1,6 +1,7 @@
 package fr.axllvy.timetabler.server
 
 import fr.axllvy.timetabler.server.events.EventStore
+import fr.axllvy.timetabler.server.health.ScrapeRuns
 import fr.axllvy.timetabler.server.posters.PosterCache
 import fr.axllvy.timetabler.server.routes.eventRoutes
 import fr.axllvy.timetabler.server.routes.healthRoute
@@ -20,7 +21,12 @@ import java.io.File
 /**
  * Installs the event feed, poster and health routes, plus the web bundle when [staticDir] is set.
  */
-fun Application.timeTablerModule(store: EventStore, posters: PosterCache, staticDir: File?) {
+fun Application.timeTablerModule(
+  store: EventStore,
+  posters: PosterCache,
+  scrapeRuns: ScrapeRuns,
+  staticDir: File?,
+) {
   install(ContentNegotiation) { json(WIRE_JSON) }
   install(AutoHeadResponse)
   // The wasm runtime needs a cross-origin isolated page; credentialless keeps same-origin posters
@@ -34,7 +40,7 @@ fun Application.timeTablerModule(store: EventStore, posters: PosterCache, static
     }
   )
   routing {
-    healthRoute(store)
+    healthRoute(scrapeRuns)
     eventRoutes(store)
     posterRoutes(store, posters)
     staticDir?.let { staticFrontendRoutes(it) }

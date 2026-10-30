@@ -233,32 +233,29 @@ class EventStore(private val dataSource: DataSource, private val clock: Clock = 
     }
   }
 
-  /** Replaces the last run of scrape [job] with [update] applied to it, null before the first. */
-  suspend fun updateScrapeRun(job: String, update: (ScrapeRun?) -> ScrapeRun) {
+  /** Saves [run] as the last run of scrape [job]. */
+  suspend fun saveScrapeRun(job: String, run: ScrapeRun) {
     dataSource.transaction { c ->
-      val key = "$SCRAPE_KEY_PREFIX$job"
-      val previous =
-        c.query("SELECT value FROM server_meta WHERE key = ? FOR UPDATE", key) { it.getString(1) }
-          .firstOrNull()
-          ?.let { META_JSON.decodeFromString(ScrapeRun.serializer(), it) }
       c.update(
         """INSERT INTO server_meta (key, value) VALUES (?, ?)
            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value""",
-        key,
-        META_JSON.encodeToString(ScrapeRun.serializer(), update(previous)),
+        "$SCRAPE_KEY_PREFIX$job",
+        META_JSON.encodeToString(ScrapeRun.serializer(), run),
       )
     }
   }
 
-  /** The last run of every scrape job that has run, by job name. */
+  /** The last run of every scrape job that has run, by job name; unreadable runs are skipped. */
   suspend fun scrapeRuns(): Map<String, ScrapeRun> = dataSource.transaction { c ->
     c.query(
         "SELECT key, value FROM server_meta WHERE key LIKE ? ORDER BY key",
         "$SCRAPE_KEY_PREFIX%",
       ) {
         it.getString(1).removePrefix(SCRAPE_KEY_PREFIX) to
-          META_JSON.decodeFromString(ScrapeRun.serializer(), it.getString(2))
+          runCatching { META_JSON.decodeFromString(ScrapeRun.serializer(), it.getString(2)) }
+            .getOrNull()
       }
+      .mapNotNull { (job, run) -> run?.let { job to it } }
       .toMap()
   }
 

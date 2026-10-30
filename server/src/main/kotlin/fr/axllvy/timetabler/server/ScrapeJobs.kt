@@ -5,7 +5,7 @@ import fr.axllvy.timetabler.domain.PARIS
 import fr.axllvy.timetabler.server.dice.DiceScraper
 import fr.axllvy.timetabler.server.dice.ScrapeReport
 import fr.axllvy.timetabler.server.events.EventStore
-import fr.axllvy.timetabler.server.health.after
+import fr.axllvy.timetabler.server.health.ScrapeRuns
 import fr.axllvy.timetabler.server.posters.PosterCache
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
@@ -17,18 +17,19 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 
 /**
- * The scheduled scrape jobs. They run one at a time, record each run in the [EventStore] for
- * `/health`, and log failures instead of throwing.
+ * The scheduled scrape jobs. They run one at a time, record each run in [runs] for `/health`, and
+ * log failures instead of throwing.
  */
 class ScrapeJobs(
   private val scraper: DiceScraper,
   private val store: EventStore,
   private val posters: PosterCache,
+  private val runs: ScrapeRuns,
   private val clock: Clock = Clock.System,
 ) {
 
   private val log = Logger.withTag("ScrapeJobs")
-  private val runs = Mutex()
+  private val oneAtATime = Mutex()
 
   /** Scrapes the DICE agenda, then archives the events of nights before yesterday. */
   suspend fun agenda() =
@@ -46,19 +47,19 @@ class ScrapeJobs(
     run(REFRESH) {
       val report = scraper.refreshSoon()
       // Posters come from image hosts, not DICE, so a throttled refresh still fetches them.
-      report.copy(posters = posters.prefetch(store.postersStartingWithin(SOON)))
+      val fetched =
+        guarded("Prefetching posters") { posters.prefetch(store.postersStartingWithin(SOON)) }
+      report.copy(posters = fetched ?: 0)
     }
 
   private suspend fun run(job: String, block: suspend () -> ScrapeReport) {
-    runs.withLock {
+    oneAtATime.withLock {
       // krontab does not catch: an escaping exception would end every future run of the job.
       val report =
         guarded("$job job") { block() }
           ?: ScrapeReport(pages = 0, upserted = 0, failed = "$job job threw, see the logs")
       log.i { "$job: $report" }
-      guarded("Recording the $job run") {
-        store.updateScrapeRun(job) { it.after(report, clock.now()) }
-      }
+      guarded("Saving the $job run") { runs.record(job, report, clock.now()) }
     }
   }
 

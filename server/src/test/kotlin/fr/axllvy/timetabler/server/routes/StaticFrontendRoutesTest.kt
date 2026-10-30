@@ -2,6 +2,7 @@ package fr.axllvy.timetabler.server.routes
 
 import fr.axllvy.timetabler.server.PostgresTestDb
 import fr.axllvy.timetabler.server.events.EventStore
+import fr.axllvy.timetabler.server.health.ScrapeRuns
 import fr.axllvy.timetabler.server.offlineFetcher
 import fr.axllvy.timetabler.server.posters.PosterCache
 import fr.axllvy.timetabler.server.timeTablerModule
@@ -38,6 +39,7 @@ class StaticFrontendRoutesTest {
         timeTablerModule(
           EventStore(db),
           PosterCache(createTempDirectory(), offlineFetcher()),
+          ScrapeRuns(EventStore(db)),
           staticDir = dir.toFile(),
         )
       }

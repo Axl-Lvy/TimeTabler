@@ -3,6 +3,7 @@ package fr.axllvy.timetabler.server.routes
 import fr.axllvy.timetabler.server.PostgresTestDb
 import fr.axllvy.timetabler.server.events.EventStore
 import fr.axllvy.timetabler.server.events.ScrapedListing
+import fr.axllvy.timetabler.server.health.ScrapeRuns
 import fr.axllvy.timetabler.server.http.PoliteFetcher
 import fr.axllvy.timetabler.server.posters.PosterCache
 import fr.axllvy.timetabler.server.timeTablerModule
@@ -80,7 +81,12 @@ class PosterRoutesTest {
   private fun app(test: suspend io.ktor.server.testing.ApplicationTestBuilder.() -> Unit) =
     testApplication {
       application {
-        timeTablerModule(store, PosterCache(createTempDirectory(), fetcher), staticDir = null)
+        timeTablerModule(
+          store,
+          PosterCache(createTempDirectory(), fetcher),
+          ScrapeRuns(store),
+          staticDir = null,
+        )
       }
       test()
     }

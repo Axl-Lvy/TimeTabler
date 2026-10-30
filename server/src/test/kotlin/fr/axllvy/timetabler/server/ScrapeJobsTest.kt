@@ -4,6 +4,7 @@ import fr.axllvy.timetabler.domain.Revision
 import fr.axllvy.timetabler.server.dice.DiceScraper
 import fr.axllvy.timetabler.server.events.EventStore
 import fr.axllvy.timetabler.server.events.ScrapedListing
+import fr.axllvy.timetabler.server.health.ScrapeRuns
 import fr.axllvy.timetabler.server.http.PoliteFetcher
 import fr.axllvy.timetabler.server.posters.PosterCache
 import fr.axllvy.timetabler.wire.ListingStatus
@@ -37,6 +38,7 @@ class ScrapeJobsTest {
     }
   private val db = PostgresTestDb.freshDataSource()
   private val store = EventStore(db, clock)
+  private val runs = ScrapeRuns(store)
 
   @AfterTest
   fun close() {
@@ -71,6 +73,7 @@ class ScrapeJobsTest {
       DiceScraper(fetcher, store, clock),
       store,
       PosterCache(posterDir, fetcher),
+      runs,
       clock,
     )
   }
@@ -128,11 +131,15 @@ class ScrapeJobsTest {
   }
 
   @Test
-  fun `a job that throws leaves the next run possible`() = runTest {
+  fun `a job whose database is gone is recorded and runs again`() = runTest {
     val jobs = throttledJobs()
     db.close()
 
     jobs.agenda()
-    jobs.refresh()
+    jobs.agenda()
+
+    val run = runs.current()!!.getValue("agenda")
+    run.failure!! shouldContain "threw"
+    run.consecutiveFailures shouldBe 2
   }
 }

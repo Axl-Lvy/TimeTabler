@@ -4,6 +4,7 @@ import fr.axllvy.timetabler.server.db.applySchema
 import fr.axllvy.timetabler.server.db.dataSource
 import fr.axllvy.timetabler.server.dice.DiceScraper
 import fr.axllvy.timetabler.server.events.EventStore
+import fr.axllvy.timetabler.server.health.ScrapeRuns
 import fr.axllvy.timetabler.server.http.PoliteFetcher
 import fr.axllvy.timetabler.server.posters.PosterCache
 import io.ktor.client.HttpClient
@@ -28,9 +29,10 @@ fun main() {
   // Posters come from image CDNs built for page loads, so they get a shorter gap than pages.
   val posterFetcher = PoliteFetcher(client, fetcherUserAgent(), minInterval = 250.milliseconds)
   val posters = PosterCache(config.posterDir, posterFetcher)
+  val scrapeRuns = ScrapeRuns(store)
   embeddedServer(Netty, port = config.port) {
-      timeTablerModule(store, posters, config.staticDir)
-      schedulingModule(ScrapeJobs(scraper, store, posters), store)
+      timeTablerModule(store, posters, scrapeRuns, config.staticDir)
+      schedulingModule(ScrapeJobs(scraper, store, posters, scrapeRuns), scrapeRuns, store)
     }
     .start(wait = true)
 }

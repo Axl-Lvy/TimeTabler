@@ -1,6 +1,7 @@
 package fr.axllvy.timetabler.server
 
 import fr.axllvy.timetabler.server.events.EventStore
+import fr.axllvy.timetabler.server.health.ScrapeRuns
 import fr.axllvy.timetabler.server.http.PoliteFetcher
 import fr.axllvy.timetabler.server.posters.PosterCache
 import io.ktor.client.HttpClient
@@ -25,7 +26,7 @@ class TestServer : AutoCloseable {
             Files.createTempDirectory("posters"),
             PoliteFetcher(HttpClient(), "TimeTabler/test"),
           )
-        timeTablerModule(store, posters, staticDir = null)
+        timeTablerModule(store, posters, ScrapeRuns(store), staticDir = null)
       }
       .start(wait = false)
 

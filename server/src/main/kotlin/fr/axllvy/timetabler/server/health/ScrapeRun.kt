@@ -6,8 +6,8 @@ import kotlinx.datetime.LocalDate
 import kotlinx.serialization.Serializable
 
 /**
- * The last run of one scrape job, with the counts of its [ScrapeReport]; [failure] is null when it
- * completed, and [consecutiveFailures] counts the failed runs since the last success.
+ * The last run of one scrape job with the counts of its [ScrapeReport]; [failure] is null when it
+ * completed, and is also set when DICE throttled a lineup fetch after the agenda was read.
  */
 @Serializable
 data class ScrapeRun(

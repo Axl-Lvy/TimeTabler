@@ -19,12 +19,7 @@ import kotlinx.datetime.toLocalDateTime
 private val RETRY_PAUSE = 10.seconds
 private const val HTTP_TOO_MANY_REQUESTS = 429
 
-/**
- * Summary of one scrape run: agenda [pages] read, distinct [listings] they held, listings
- * [upserted], event pages whose [lineups] were read, the [lastDay] of the agenda read in full, and
- * [failed], why the run stopped early, null when it completed. [overflowedSubGenres] counts
- * sub-genre pages that still held more events than they show; [posters] counts posters prefetched.
- */
+/** Counts of one scrape run; [failed] says why it stopped early, null when it completed. */
 data class ScrapeReport(
   val pages: Int,
   val upserted: Int,
