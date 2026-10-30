@@ -18,11 +18,13 @@ A `detect` job classifies every run with `dorny/paths-filter` against the diff:
 - **noop**: no code or build file touched. Only `detect` and `check-status` run.
 - **cheap**: code in `commonMain`, `jvmMain`, `:server`, `:shared` or `:e2e` (or their tests), and no
   platform source set, manifest, Gradle script or version catalog. Runs `format-check`,
-  `jvm-tests` (`:shared:jvmTest :server:test :e2e:test :composeApp:jvmTest`) and
-  `compile-multiplat`.
+  `jvm-tests` (JVM tests with Kover coverage, Sonar inline), `compile-multiplat` and
+  `publish-test-results`.
 - **full**: anything in `androidApp`, `androidMain`, `iosMain`, `wasmJsMain`, `nonJsMain`, a
   manifest, any `*.gradle.kts`, `gradle/libs.versions.toml` or `.github/workflows/check.yml`. Adds
-  `wasm-tests`, Android unit tests and the iOS compile.
+  `wasm-tests`, `ios-tests`, `android-build` and a standalone `sonar-analysis`, and drops
+  `compile-multiplat` since the test jobs compile every target. `android-build` stands in for
+  MemorChess's emulator tests until TimeTabler has instrumented tests.
 
 The daily cron and the `- [x] Force running tests` PR body checkbox force full; `[skip-tests]` in
 the title forces noop. Branch protection requires the single aggregator check `All checks passed`.
