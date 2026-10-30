@@ -8,9 +8,17 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runComposeUiTest
+import fr.axllvy.timetabler.auth.AdminApi
+import fr.axllvy.timetabler.auth.AdminAuth
+import fr.axllvy.timetabler.auth.ISSUER
+import fr.axllvy.timetabler.auth.MapStore
+import fr.axllvy.timetabler.auth.SignInSecrets
+import fr.axllvy.timetabler.auth.oidcClient
 import fr.axllvy.timetabler.data.EventStoreLocal
 import fr.axllvy.timetabler.data.EventSync
 import fr.axllvy.timetabler.data.EventsApi
@@ -366,6 +374,41 @@ class AppUiTest {
       onAllNodesWithText("Connect once to load events").fetchSemanticsNodes().isNotEmpty()
     }
     onNodeWithText("Event not found").assertDoesNotExist()
+  }
+
+  @Test
+  fun `a long press on the title opens the issuer sign-in page`() = runComposeUiTest {
+    val opened = mutableListOf<String>()
+    val auth =
+      AdminAuth(
+        oidc = oidcClient { error("no token request expected") },
+        store = MapStore(),
+        clientId = "spa",
+        redirectUri = "https://app.test/admin/callback",
+        newSecrets = { SignInSecrets("state", "verifier", "challenge") },
+        navigate = { opened += it },
+        currentPath = { "/" },
+      )
+    val adminModule = module {
+      single { auth }
+      single { AdminApi(HttpClient(MockEngine { error("signed out") }), "", auth) }
+    }
+    setContent { App(testModules + adminModule) }
+
+    onNodeWithText("TimeTabler").performTouchInput { longClick() }
+    onNodeWithText("Sign in").performClick()
+
+    waitUntil("issuer page opened", timeoutMillis = 5_000) { opened.isNotEmpty() }
+    opened.single().substringBefore('?') shouldBe "$ISSUER/auth"
+  }
+
+  @Test
+  fun `admin sign-in is unavailable without an admin session`() = runComposeUiTest {
+    setContent { App(testModules) }
+
+    onNodeWithText("TimeTabler").performTouchInput { longClick() }
+
+    onNodeWithText("Admin sign-in is not available in this app.").assertExists()
   }
 }
 
