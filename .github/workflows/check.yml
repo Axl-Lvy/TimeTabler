@@ -164,8 +164,12 @@ jobs:
         with:
           cache-read-only: false
           cache-cleanup: never
+      - run: ./gradlew :server:installPlaywrightChromium
       # composeApp's report pulls in :shared:jvmTest through kover(projects.shared).
       - run: ./gradlew koverXmlReportJvm :server:koverXmlReport :e2e:test
+        env:
+          TT_BROWSER_TESTS: 'true'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
       # The JVM Kover XML is the only coverage source, so on the cheap tier Sonar runs here and
       # saves the sonar-analysis job its runner, setup and recompile.

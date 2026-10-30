@@ -71,6 +71,13 @@ tasks.test {
   inputs.property("browserTests", providers.environmentVariable("TT_BROWSER_TESTS").orElse(""))
 }
 
+// Installs the Chromium this Playwright version drives, with its system libraries, for CI.
+tasks.register<JavaExec>("installPlaywrightChromium") {
+  classpath = sourceSets.main.get().runtimeClasspath
+  mainClass.set("com.microsoft.playwright.CLI")
+  args("install", "--with-deps", "chromium")
+}
+
 // Bakes the build sha into build-info.properties; the Docker build passes -PbuildSha=<sha7>.
 tasks.processResources {
   val buildSha = providers.gradleProperty("buildSha").orElse("dev")
