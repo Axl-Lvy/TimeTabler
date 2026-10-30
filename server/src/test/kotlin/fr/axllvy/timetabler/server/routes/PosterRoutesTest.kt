@@ -24,12 +24,15 @@ import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
 import kotlin.io.path.createTempDirectory
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.time.Instant
+import kotlinx.coroutines.runBlocking
 
 class PosterRoutesTest {
 
-  private val store = EventStore(PostgresTestDb.freshDataSource())
+  private val db = PostgresTestDb.freshDataSource()
+  private val store = EventStore(db)
   private var sourceRequests = 0
   private val png =
     ByteArrayOutputStream()
@@ -49,7 +52,7 @@ class PosterRoutesTest {
       "TimeTabler/test",
     )
 
-  private val eventId =
+  private val eventId = runBlocking {
     store
       .upsert(
         ScrapedListing(
@@ -67,6 +70,12 @@ class PosterRoutesTest {
         )
       )
       .id
+  }
+
+  @AfterTest
+  fun close() {
+    db.close()
+  }
 
   private fun app(test: suspend io.ktor.server.testing.ApplicationTestBuilder.() -> Unit) =
     testApplication {

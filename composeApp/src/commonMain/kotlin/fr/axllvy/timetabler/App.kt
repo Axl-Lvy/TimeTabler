@@ -23,18 +23,26 @@ import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.delay
 import org.koin.compose.KoinIsolatedContext
 import org.koin.compose.koinInject
+import org.koin.core.KoinApplication
 import org.koin.core.module.Module
 import org.koin.dsl.koinApplication
 
 private val SYNC_INTERVAL = 5.minutes
 
-/** Root composable of the TimeTabler app, wired with [modules]. */
+/** Root composable of the TimeTabler app, wired with [modules] once for its whole lifetime. */
 @Composable
 fun App(modules: List<Module> = listOf(platformModule(), appModule)) {
+  // Keyed on nothing: the default list is rebuilt on every call and must not rebuild Koin.
+  val koin = remember { koinApplication { modules(modules) } }
+  App(koin)
+}
+
+/** Root composable of the TimeTabler app on [koin], which outlives it and is never closed here. */
+@Composable
+fun App(koin: KoinApplication) {
   setSingletonImageLoaderFactory { context ->
     ImageLoader.Builder(context).components { add(KtorNetworkFetcherFactory()) }.build()
   }
-  val koin = remember(modules) { koinApplication { modules(modules) } }
   KoinIsolatedContext(context = koin) {
     val sync = koinInject<EventSync>()
     LaunchedEffect(sync) {

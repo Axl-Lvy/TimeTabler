@@ -18,14 +18,21 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
 import kotlin.io.path.createTempDirectory
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.time.Instant
 
 class EventRoutesTest {
 
-  private val store = EventStore(PostgresTestDb.freshDataSource())
+  private val db = PostgresTestDb.freshDataSource()
+  private val store = EventStore(db)
 
-  private fun stored(id: String) =
+  @AfterTest
+  fun close() {
+    db.close()
+  }
+
+  private suspend fun stored(id: String) =
     store.upsert(
       ScrapedListing(
         Source.DICE,

@@ -19,8 +19,9 @@ private val RETRY_PAUSE = 10.seconds
 private const val HTTP_TOO_MANY_REQUESTS = 429
 
 /**
- * Summary of one scrape run; [failed] says why the run stopped early, null when it completed.
- * [overflowedSubGenres] counts sub-genre pages that still held more events than they show.
+ * Summary of one scrape run: agenda [pages] read, listings [upserted], event pages whose [lineups]
+ * were read, and [failed], why the run stopped early, null when it completed. [overflowedSubGenres]
+ * counts sub-genre pages that still held more events than they show.
  */
 data class ScrapeReport(
   val pages: Int,
@@ -28,6 +29,7 @@ data class ScrapeReport(
   val failed: String?,
   val overflowedDays: Int = 0,
   val overflowedSubGenres: Int = 0,
+  val lineups: Int = 0,
 )
 
 /** Scrapes DICE's Paris agenda into the [EventStore]. */
@@ -45,9 +47,10 @@ class DiceScraper(
     var upserted = 0
     var overflowedDays = 0
     var overflowedSubGenres = 0
+    var lineups = 0
 
     fun report(failed: String?) =
-      ScrapeReport(pages, upserted, failed, overflowedDays, overflowedSubGenres)
+      ScrapeReport(pages, upserted, failed, overflowedDays, overflowedSubGenres, lineups)
   }
 
   /**
@@ -95,15 +98,14 @@ class DiceScraper(
         }
       }
     }
-    fetchLineups(withUnreadLineups(toFetch))
+    tally.lineups = fetchLineups(withUnreadLineups(toFetch))
     return tally.report(null)
   }
 
   /** Re-reads the lineup of every listing starting in the next 48 hours. */
   suspend fun refreshSoon(): ScrapeReport {
     val refs = store.listingsStartingWithin(48.hours).filter { it.source == Source.DICE }
-    fetchLineups(refs)
-    return ScrapeReport(refs.size, 0, null)
+    return ScrapeReport(pages = 0, upserted = 0, failed = null, lineups = fetchLineups(refs))
   }
 
   // Lineups are skipped too: a failing agenda usually means DICE wants us to back off.
@@ -130,7 +132,7 @@ class DiceScraper(
       ?: PageRead.Failed("$url: no page data")
   }
 
-  private fun withUnreadLineups(changed: Map<String, ListingRef>): Collection<ListingRef> =
+  private suspend fun withUnreadLineups(changed: Map<String, ListingRef>): Collection<ListingRef> =
     (changed.values + store.listingsNeedingLineup().filter { it.source == Source.DICE })
       .distinctBy { it.externalId }
 
@@ -143,18 +145,26 @@ class DiceScraper(
     return fetcher.get(url)
   }
 
-  private suspend fun fetchLineups(refs: Collection<ListingRef>) {
+  // Returns how many lineups were read.
+  private suspend fun fetchLineups(refs: Collection<ListingRef>): Int {
+    var read = 0
     for (ref in refs) {
       when (val result = fetcher.get(ref.url)) {
-        is FetchResult.Ok ->
-          DiceEventParser.performers(result.body)?.let {
-            store.setLineup(ref.source, ref.externalId, it)
-          } ?: log.w { "No lineup data on ${ref.url}" }
+        is FetchResult.Ok -> {
+          val lineup = DiceEventParser.performers(result.body)
+          if (lineup == null) {
+            log.w { "No lineup data on ${ref.url}" }
+          } else {
+            store.setLineup(ref.source, ref.externalId, lineup)
+            read++
+          }
+        }
         is FetchResult.Failed -> {
           log.w { "Could not fetch ${ref.url}: ${result.status} ${result.reason}" }
-          if (result.status == HTTP_TOO_MANY_REQUESTS) return
+          if (result.status == HTTP_TOO_MANY_REQUESTS) return read
         }
       }
     }
+    return read
   }
 }

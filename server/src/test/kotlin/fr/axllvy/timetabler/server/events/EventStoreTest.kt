@@ -9,10 +9,12 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
+import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 
 class EventStoreTest {
@@ -22,7 +24,13 @@ class EventStoreTest {
     object : Clock {
       override fun now() = now
     }
-  private val store = EventStore(PostgresTestDb.freshDataSource(), clock)
+  private val db = PostgresTestDb.freshDataSource()
+  private val store = EventStore(db, clock)
+
+  @AfterTest
+  fun close() {
+    db.close()
+  }
 
   private fun listing(
     id: String,
@@ -44,7 +52,7 @@ class EventStoreTest {
       lineup = emptyList(),
     )
 
-  private fun drain(): List<Pair<String, Revision>> = buildList {
+  private suspend fun drain(): List<Pair<String, Revision>> = buildList {
     var since = Revision.ZERO
     do {
       val page = store.page(since, 100)
@@ -54,7 +62,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `a new listing becomes an event in the feed`() {
+  fun `a new listing becomes an event in the feed`() = runTest {
     val id = store.upsert(listing("a")).id
     store.setLineup(Source.DICE, "a", listOf("I Hate Models", "Narciss"))
 
@@ -70,7 +78,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `an identical listing does not change the revision`() {
+  fun `an identical listing does not change the revision`() = runTest {
     store.upsert(listing("a"))
     val before = store.page(Revision.ZERO, 100).events.single().revision
 
@@ -81,7 +89,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `a changed lineup bumps the revision past every other`() {
+  fun `a changed lineup bumps the revision past every other`() = runTest {
     store.upsert(listing("a"))
     store.upsert(listing("b"))
     val highest = store.page(Revision.ZERO, 100).next
@@ -94,7 +102,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `setting the same lineup again changes nothing`() {
+  fun `setting the same lineup again changes nothing`() = runTest {
     store.upsert(listing("a"))
     store.setLineup(Source.DICE, "a", listOf("Kmyle"))
     val highest = store.page(Revision.ZERO, 100).next
@@ -105,14 +113,14 @@ class EventStoreTest {
   }
 
   @Test
-  fun `a changed title reports a change`() {
+  fun `a changed title reports a change`() = runTest {
     store.upsert(listing("a"))
 
     store.upsert(listing("a", title = "Renamed")).changed shouldBe true
   }
 
   @Test
-  fun `venue names differing in case share one venue`() {
+  fun `venue names differing in case share one venue`() = runTest {
     store.upsert(listing("a", venue = "La Machine du Moulin Rouge"))
     store.upsert(listing("b", venue = "la machine du moulin rouge"))
 
@@ -121,7 +129,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `paging while an event changes misses nothing`() {
+  fun `paging while an event changes misses nothing`() = runTest {
     (1..5).forEach { store.upsert(listing("e$it")) }
 
     val first = store.page(Revision.ZERO, 2)
@@ -140,7 +148,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `archiving moves old events to removed`() {
+  fun `archiving moves old events to removed`() = runTest {
     val old = store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z"))).id
     store.upsert(listing("new"))
     val highest = store.page(Revision.ZERO, 100).next
@@ -155,7 +163,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `lists listings starting soon`() {
+  fun `lists listings starting soon`() = runTest {
     store.upsert(listing("soon", startsAt = now + 20.hours))
     store.upsert(listing("later", startsAt = now + 60.hours))
     store.upsert(listing("past", startsAt = now - 30.hours))
@@ -164,7 +172,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `listings whose lineup was never read need one`() {
+  fun `listings whose lineup was never read need one`() = runTest {
     store.upsert(listing("read"))
     store.upsert(listing("unread"))
     store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z")))
@@ -176,9 +184,10 @@ class EventStoreTest {
   }
 
   @Test
-  fun `every database has its own stable epoch`() {
+  fun `every database has its own stable epoch`() = runTest {
     val first = store.page(Revision.ZERO, 10).epoch
-    val other = EventStore(PostgresTestDb.freshDataSource(), clock).page(Revision.ZERO, 10).epoch
+    val other =
+      PostgresTestDb.freshDataSource().use { EventStore(it, clock).page(Revision.ZERO, 10).epoch }
 
     first.isNotBlank() shouldBe true
     store.page(Revision.ZERO, 10).epoch shouldBe first
@@ -186,7 +195,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `knows the poster url of an event`() {
+  fun `knows the poster url of an event`() = runTest {
     val id = store.upsert(listing("a")).id
 
     store.posterUrl(id) shouldBe "https://img/a.jpg"

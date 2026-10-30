@@ -16,8 +16,10 @@ import kotlin.io.path.exists
 import kotlin.io.path.moveTo
 import kotlin.io.path.readBytes
 import kotlin.io.path.writeBytes
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 private const val MAX_WIDTH = 600
 private const val JPEG_QUALITY = 0.85f
@@ -33,22 +35,33 @@ class PosterCache(private val dir: Path, private val fetcher: PoliteFetcher) {
    */
   suspend fun jpeg(id: EventId, sourceUrl: String): ByteArray? {
     val file = dir.resolve("${id.value}.jpg")
-    if (file.exists()) return file.readBytes()
+    readIfCached(file)?.let {
+      return it
+    }
     return inFlight
       .computeIfAbsent(id) { Mutex() }
       .withLock {
-        if (file.exists()) return@withLock file.readBytes()
+        readIfCached(file)?.let {
+          return@withLock it
+        }
         val source = fetcher.getBytes(sourceUrl) ?: return@withLock null
-        val image =
-          runCatching { ImageIO.read(source.inputStream()) }.getOrNull() ?: return@withLock null
-        val jpeg = encode(resize(image))
-        dir.createDirectories()
-        // Written aside then moved, so a reader never sees a half-written poster.
-        val partial = dir.resolve("${id.value}.jpg.part")
-        partial.writeBytes(jpeg)
-        partial.moveTo(file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-        jpeg
+        withContext(Dispatchers.IO) { convertAndStore(source, file) }
       }
+  }
+
+  private suspend fun readIfCached(file: Path): ByteArray? =
+    withContext(Dispatchers.IO) { if (file.exists()) file.readBytes() else null }
+
+  // Null when the source is not an image ImageIO can read.
+  private fun convertAndStore(source: ByteArray, file: Path): ByteArray? {
+    val image = runCatching { ImageIO.read(source.inputStream()) }.getOrNull() ?: return null
+    val jpeg = encode(resize(image))
+    dir.createDirectories()
+    // Written aside then moved, so a reader never sees a half-written poster.
+    val partial = file.resolveSibling("${file.fileName}.part")
+    partial.writeBytes(jpeg)
+    partial.moveTo(file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+    return jpeg
   }
 
   private fun resize(image: BufferedImage): BufferedImage {

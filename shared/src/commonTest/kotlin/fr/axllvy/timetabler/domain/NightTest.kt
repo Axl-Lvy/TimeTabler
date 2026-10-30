@@ -36,6 +36,17 @@ class NightTest {
   }
 
   @Test
+  fun `a night ends at six the next morning`() {
+    nightEnd(LocalDate(2026, 10, 30)) shouldBe paris("2026-10-31T06:00")
+    tonight(paris("2026-10-31T06:00")) shouldBe LocalDate(2026, 10, 31)
+  }
+
+  @Test
+  fun `the night the clocks go back still ends at six`() {
+    nightEnd(LocalDate(2026, 10, 24)) shouldBe paris("2026-10-25T06:00")
+  }
+
+  @Test
   fun `tonight at three on saturday is friday`() {
     tonight(paris("2026-10-31T03:00")) shouldBe LocalDate(2026, 10, 30)
   }

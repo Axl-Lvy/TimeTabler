@@ -21,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -33,9 +34,11 @@ import fr.axllvy.timetabler.data.EventStoreLocal
 import fr.axllvy.timetabler.data.EventSync
 import fr.axllvy.timetabler.data.SyncState
 import fr.axllvy.timetabler.domain.EventId
+import fr.axllvy.timetabler.domain.nightEnd
 import fr.axllvy.timetabler.domain.tonight
 import fr.axllvy.timetabler.ui.nightLabel
 import kotlin.time.Clock
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -49,15 +52,22 @@ fun EventsScreen(onOpen: (EventId) -> Unit) {
   val events by store.events().collectAsState(initial = null)
   val syncState by sync.state.collectAsState()
   var hasEverSynced by remember { mutableStateOf(true) }
+  var refreshing by remember { mutableStateOf(false) }
   var query by rememberSaveable { mutableStateOf("") }
   var filter by rememberSaveable { mutableStateOf(QuickFilter.ALL) }
   LaunchedEffect(syncState) { hasEverSynced = store.hasEverSynced() }
 
-  val now = Clock.System.now()
-  val groups =
-    remember(events, query, filter, now.epochSeconds / 60) {
-      filterEvents(events.orEmpty(), query, filter, now)
+  // Only "tonight" depends on the time, so the list recomputes when a night ends.
+  val now by
+    produceState(Clock.System.now()) {
+      while (true) {
+        val current = Clock.System.now()
+        delay(nightEnd(tonight(current)) - current)
+        value = Clock.System.now()
+      }
     }
+  val groups =
+    remember(events, query, filter, now) { filterEvents(events.orEmpty(), query, filter, now) }
 
   Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
     Text(
@@ -85,8 +95,18 @@ fun EventsScreen(onOpen: (EventId) -> Unit) {
       }
     }
     PullToRefreshBox(
-      isRefreshing = syncState == SyncState.SYNCING && events != null,
-      onRefresh = { scope.launch { sync.syncOnce() } },
+      // Only a pull shows the indicator; the periodic background sync stays silent.
+      isRefreshing = refreshing,
+      onRefresh = {
+        scope.launch {
+          refreshing = true
+          try {
+            sync.syncOnce()
+          } finally {
+            refreshing = false
+          }
+        }
+      },
       modifier = Modifier.fillMaxSize(),
     ) {
       when {

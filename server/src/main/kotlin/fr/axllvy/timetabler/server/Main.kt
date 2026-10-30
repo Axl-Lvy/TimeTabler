@@ -29,7 +29,7 @@ fun main() {
   val posterFetcher = PoliteFetcher(client, fetcherUserAgent(), minInterval = 250.milliseconds)
   embeddedServer(Netty, port = config.port) {
       timeTablerModule(store, PosterCache(config.posterDir, posterFetcher), config.staticDir)
-      schedulingModule(scraper, store)
+      schedulingModule(ScrapeJobs(scraper, store), store)
     }
     .start(wait = true)
 }

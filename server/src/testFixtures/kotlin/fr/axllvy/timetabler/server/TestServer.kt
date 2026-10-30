@@ -13,8 +13,10 @@ import kotlinx.coroutines.runBlocking
 /** The TimeTabler server on a random local port, backed by a fresh test database. */
 class TestServer : AutoCloseable {
 
+  private val db = PostgresTestDb.freshDataSource()
+
   /** Store behind the running server, for arranging data. */
-  val store = EventStore(PostgresTestDb.freshDataSource())
+  val store = EventStore(db)
 
   private val server: EmbeddedServer<*, *> =
     embeddedServer(Netty, port = 0) {
@@ -32,5 +34,8 @@ class TestServer : AutoCloseable {
     "http://localhost:${server.engine.resolvedConnectors().first().port}"
   }
 
-  override fun close() = server.stop(gracePeriodMillis = 0, timeoutMillis = 1000)
+  override fun close() {
+    server.stop(gracePeriodMillis = 0, timeoutMillis = 1000)
+    db.close()
+  }
 }
