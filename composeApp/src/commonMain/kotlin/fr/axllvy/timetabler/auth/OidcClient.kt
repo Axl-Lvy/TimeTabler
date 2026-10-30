@@ -10,6 +10,8 @@ import io.ktor.http.URLBuilder
 import io.ktor.http.isSuccess
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.io.encoding.Base64
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -89,7 +91,7 @@ class OidcClient(
           TokenExchange.Ok(
             accessToken = AccessToken(payload.accessToken),
             refreshToken = payload.refreshToken?.let(::RefreshToken),
-            expiresInSeconds = payload.expiresIn,
+            expiresIn = payload.expiresIn.seconds,
             account = payload.idToken?.let(::decodeIdToken),
           )
         }
@@ -115,7 +117,7 @@ sealed interface TokenExchange {
   data class Ok(
     val accessToken: AccessToken,
     val refreshToken: RefreshToken?,
-    val expiresInSeconds: Long,
+    val expiresIn: Duration,
     val account: AdminAccount?,
   ) : TokenExchange
 

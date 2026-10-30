@@ -8,6 +8,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.Parameters
 import io.ktor.http.Url
 import kotlin.test.Test
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.test.runTest
 
 class OidcClientTest {
@@ -42,7 +43,7 @@ class OidcClientTest {
       TokenExchange.Ok(
         AccessToken("access"),
         RefreshToken("refresh"),
-        3600,
+        3600.seconds,
         AdminAccount("owner-sub", "Axel"),
       )
     form?.get("grant_type") shouldBe "authorization_code"

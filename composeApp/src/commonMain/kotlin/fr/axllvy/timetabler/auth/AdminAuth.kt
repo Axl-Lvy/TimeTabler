@@ -138,7 +138,7 @@ class AdminAuth(
   private fun save(tokens: TokenExchange.Ok) {
     store.put(ACCESS_TOKEN, tokens.accessToken.value)
     tokens.refreshToken?.let { store.put(REFRESH_TOKEN, it.value) } ?: store.remove(REFRESH_TOKEN)
-    val expiresAt = now() + tokens.expiresInSeconds.seconds
+    val expiresAt = now() + tokens.expiresIn
     store.put(EXPIRES_AT, expiresAt.toEpochMilliseconds().toString())
     tokens.account?.let { account ->
       store.put(SUB, account.sub)
