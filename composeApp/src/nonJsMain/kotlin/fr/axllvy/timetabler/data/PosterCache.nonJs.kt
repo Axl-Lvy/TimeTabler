@@ -8,6 +8,7 @@ import coil3.request.ErrorResult
 import coil3.request.ImageRequest
 import coil3.size.Size
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
 
 actual fun posterCache(context: PlatformContext): PosterCache =
