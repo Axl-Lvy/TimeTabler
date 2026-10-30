@@ -22,24 +22,23 @@ class AdminApi(
 
   /** Whether the server accepts the signed-in account as an admin. */
   suspend fun check(): AdminCheck {
-    val response =
-      try {
-        authorized { url("$baseUrl/v1/admin/me") } ?: return AdminCheck.SignedOut
-      } catch (e: CancellationException) {
-        throw e
-      } catch (e: Throwable) {
-        // Throwable, not Exception: a failed browser fetch on wasm is a JsException.
-        LOG.w { "Admin check failed: ${e.message}" }
-        return AdminCheck.Unreachable
+    return try {
+      val response = authorized { url("$baseUrl/v1/admin/me") } ?: return AdminCheck.SignedOut
+      when (response.status) {
+        HttpStatusCode.OK ->
+          AdminCheck.Admin(
+            WIRE_JSON.decodeFromString(AdminIdentity.serializer(), response.bodyAsText()).subject
+          )
+        HttpStatusCode.Unauthorized -> AdminCheck.SignedOut
+        HttpStatusCode.Forbidden -> AdminCheck.NotAdmin
+        else -> AdminCheck.Unreachable
       }
-    return when (response.status) {
-      HttpStatusCode.OK ->
-        AdminCheck.Admin(
-          WIRE_JSON.decodeFromString(AdminIdentity.serializer(), response.bodyAsText()).subject
-        )
-      HttpStatusCode.Unauthorized -> AdminCheck.SignedOut
-      HttpStatusCode.Forbidden -> AdminCheck.NotAdmin
-      else -> AdminCheck.Unreachable
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Throwable) {
+      // Throwable, not Exception: a failed browser fetch on wasm is a JsException.
+      LOG.w { "Admin check failed: ${e.message}" }
+      AdminCheck.Unreachable
     }
   }
 

@@ -63,6 +63,16 @@ class AdminApiTest {
   }
 
   @Test
+  fun `an unreadable answer is reported as unreachable`() = runTest {
+    auth.completeSignIn(CodeGrant("code", "verifier"))
+    val (api, _) = api(HttpStatusCode.OK, "<html>proxy error</html>")
+
+    val check = api.check()
+
+    check shouldBe AdminCheck.Unreachable
+  }
+
+  @Test
   fun `a server that cannot be reached is reported`() = runTest {
     auth.completeSignIn(CodeGrant("code", "verifier"))
     val api = AdminApi(HttpClient(MockEngine { throw IllegalStateException("offline") }), "", auth)

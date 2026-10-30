@@ -26,13 +26,13 @@ flowchart LR
 
     subgraph Server["Server (Ktor)"]
         Scraper["Scrapers\n(krontab schedule)"]
-        Api["/v1/events, /v1/posters\nweb bundle"]
+        Api["/v1/events, /v1/posters,\n/v1/admin, web bundle"]
     end
 
     Postgres[("Postgres\nvenues, events, listings")]
     Dice["DICE\npublic pages"]
     Shotgun["Shotgun\n(headless Chromium, planned)"]
-    Oidc["OIDC provider\n(Logto, planned)"]
+    Oidc["OIDC provider\n(Logto)"]
     Vision["Local vision model\n(Ollama, planned)"]
 
     Client -- "pull changed events since revision" --> Api
@@ -40,7 +40,8 @@ flowchart LR
     Scraper -.-> Shotgun
     Scraper --> Postgres
     Api --> Postgres
-    Client -. "admin sign in" .-> Oidc
+    Client -- "admin sign in (web)" --> Oidc
+    Api -- "admin token keys (JWKS)" --> Oidc
     Server -. "timetable screenshots" .-> Vision
 ```
 
@@ -49,8 +50,9 @@ flowchart LR
 - The **client** pulls the events changed since its last revision into its local database (Room
   on Android and iOS, IndexedDB on web) and renders only from there, so it works offline.
 - Ticket buttons open the DICE or Shotgun page; the app itself never calls those sites.
-- Dashed parts are planned: Shotgun scraping, admin login to add timetables, and reading set
-  times from story screenshots with a local vision model.
+- Only the owner signs in, through Logto, and admin routes need a token with the `admin` scope.
+- Dashed parts are planned: Shotgun scraping, admin editing of timetables, and reading set times
+  from story screenshots with a local vision model.
 
 ## Run locally
 
@@ -61,6 +63,10 @@ TT_DB_URL=jdbc:postgresql://localhost:5432/tt TT_DB_USER=tt TT_DB_PASSWORD=tt ./
 ./gradlew :composeApp:wasmJsBrowserDevelopmentRun   # web client
 ./gradlew :androidApp:installDebug                  # Android client
 ```
+
+Admin routes refuse every request until the server has `TT_AUTH_ISSUER` and `TT_AUTH_AUDIENCE`
+(and `TT_AUTH_JWKS_URL` when the keys are not at `<issuer>/jwks`), and the client signs in only once
+`ADMIN_OIDC` in `composeApp/.../auth/AuthConfig.kt` holds the tenant instead of placeholders.
 
 ## License
 
