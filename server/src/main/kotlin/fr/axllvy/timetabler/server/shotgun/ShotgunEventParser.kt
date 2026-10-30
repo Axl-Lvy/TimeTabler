@@ -61,7 +61,8 @@ object ShotgunEventParser {
     val offers = event["offers"].all()
     return when {
       event["eventStatus"].string?.endsWith("EventCancelled") == true -> ListingStatus.CANCELLED
-      offers.isNotEmpty() && offers.all { it["availability"].string?.endsWith("SoldOut") == true } ->
+      offers.isNotEmpty() &&
+        offers.all { it["availability"].string?.endsWith("SoldOut") == true } ->
         ListingStatus.SOLD_OUT
       event["eventStatus"].string?.endsWith("EventScheduled") == true -> ListingStatus.ON_SALE
       else -> ListingStatus.UNKNOWN

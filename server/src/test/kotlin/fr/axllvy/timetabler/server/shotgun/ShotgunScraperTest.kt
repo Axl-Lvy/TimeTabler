@@ -107,7 +107,9 @@ class ShotgunScraperTest {
 
   @Test
   fun `a bot checkpoint fails the run and stores nothing`() = runTest {
-    val browser = browser { if (it == SHOTGUN_AGENDA_URL) FetchResult.Ok(fixture("shotgun/checkpoint.html")) else null }
+    val browser = browser {
+      if (it == SHOTGUN_AGENDA_URL) FetchResult.Ok(fixture("shotgun/checkpoint.html")) else null
+    }
 
     val report = ShotgunScraper(browser, store, clock).scrapeAgenda()
 

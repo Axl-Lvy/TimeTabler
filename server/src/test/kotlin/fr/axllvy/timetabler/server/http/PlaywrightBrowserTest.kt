@@ -61,38 +61,40 @@ class PlaywrightBrowserTest {
   }
 
   @Test
-  fun `loads a page without its images`() = runBlocking<Unit> {
-    val browser = PlaywrightBrowser("TimeTabler/test")
+  fun `loads a page without its images`() =
+    runBlocking<Unit> {
+      val browser = PlaywrightBrowser("TimeTabler/test")
 
-    val result = browser.session { it.load("$baseUrl/page") }
+      val result = browser.session { it.load("$baseUrl/page") }
 
-    result.shouldBeInstanceOf<FetchResult.Ok>().body shouldContain "/fr/events/orka"
-    imageHits.get() shouldBe 0
-    userAgent!! shouldContain "Chrome/"
-    userAgent!! shouldContain "TimeTabler/test"
-  }
-
-  @Test
-  fun `an HTTP error is a failed load with its status`() = runBlocking<Unit> {
-    val browser = PlaywrightBrowser("TimeTabler/test")
-
-    val result = browser.session { it.load("$baseUrl/busy") }
-
-    result.shouldBeInstanceOf<FetchResult.Failed>().status shouldBe 429
-  }
+      result.shouldBeInstanceOf<FetchResult.Ok>().body shouldContain "/fr/events/orka"
+      imageHits.get() shouldBe 0
+      userAgent!! shouldContain "Chrome/"
+      userAgent!! shouldContain "TimeTabler/test"
+    }
 
   @Test
-  fun `waits the interval between two loads`() = runBlocking<Unit> {
-    val browser = PlaywrightBrowser("TimeTabler/test", minInterval = 1.seconds)
+  fun `an HTTP error is a failed load with its status`() =
+    runBlocking<Unit> {
+      val browser = PlaywrightBrowser("TimeTabler/test")
 
-    val elapsed =
-      browser.session { loader ->
+      val result = browser.session { it.load("$baseUrl/busy") }
+
+      result.shouldBeInstanceOf<FetchResult.Failed>().status shouldBe 429
+    }
+
+  @Test
+  fun `waits the interval between two loads`() =
+    runBlocking<Unit> {
+      val browser = PlaywrightBrowser("TimeTabler/test", minInterval = 1.seconds)
+
+      val elapsed = browser.session { loader ->
         loader.load("$baseUrl/page")
         val second = TimeSource.Monotonic.markNow()
         loader.load("$baseUrl/page")
         second.elapsedNow()
       }
 
-    elapsed shouldBeGreaterThanOrEqualTo 1.seconds
-  }
+      elapsed shouldBeGreaterThanOrEqualTo 1.seconds
+    }
 }

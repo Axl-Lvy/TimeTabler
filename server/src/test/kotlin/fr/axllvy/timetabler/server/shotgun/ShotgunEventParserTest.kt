@@ -57,8 +57,7 @@ class ShotgunEventParserTest {
 
   @Test
   fun `an event whose every offer is sold out is sold out`() {
-    val offers =
-      """"offers": [{"@type": "Offer", "availability": "https://schema.org/SoldOut"}]"""
+    val offers = """"offers": [{"@type": "Offer", "availability": "https://schema.org/SoldOut"}]"""
     val html = withEvent { it.replace(""""offers": []""", offers) }
 
     ShotgunEventParser.listing(html, "dusk-mia-mao")?.status shouldBe ListingStatus.SOLD_OUT

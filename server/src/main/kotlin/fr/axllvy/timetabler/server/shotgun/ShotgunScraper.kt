@@ -94,9 +94,10 @@ class ShotgunScraper(
   /** Re-reads the event pages of every Shotgun listing starting in the next 48 hours. */
   suspend fun refreshSoon(): ScrapeReport {
     val slugs =
-      store.listingsStartingWithin(48.hours).filter { it.source == Source.SHOTGUN }.map {
-        it.externalId
-      }
+      store
+        .listingsStartingWithin(48.hours)
+        .filter { it.source == Source.SHOTGUN }
+        .map { it.externalId }
     if (slugs.isEmpty()) return ScrapeReport(pages = 0, upserted = 0, failed = null)
     return browser.session { loader ->
       val tally = Tally()

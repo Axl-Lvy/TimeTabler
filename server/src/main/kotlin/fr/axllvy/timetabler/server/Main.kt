@@ -34,7 +34,8 @@ fun main() {
   val scrapeRuns = ScrapeRuns(store)
   // Off until DICE and Shotgun listings of one night are matched, or each night shows twice.
   val shotgun =
-    if (config.shotgunEnabled) ShotgunScraper(PlaywrightBrowser(fetcherUserAgent()), store) else null
+    if (config.shotgunEnabled) ShotgunScraper(PlaywrightBrowser(fetcherUserAgent()), store)
+    else null
   embeddedServer(Netty, port = config.port) {
       timeTablerModule(store, posters, scrapeRuns, config.staticDir, config.auth)
       schedulingModule(
