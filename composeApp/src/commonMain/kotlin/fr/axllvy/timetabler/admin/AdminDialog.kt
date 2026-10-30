@@ -81,6 +81,6 @@ private fun AdminCheck?.label(): String =
     null -> "Checking admin access…"
     is AdminCheck.Admin -> "Admin access confirmed"
     AdminCheck.NotAdmin -> "This account is not an admin"
-    AdminCheck.SignedOut -> "The session has expired; sign in again"
+    AdminCheck.SignedOut -> "The server refused this session; sign out and sign in again"
     AdminCheck.Unreachable -> "Could not reach the server"
   }
