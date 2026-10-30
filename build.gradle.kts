@@ -33,11 +33,12 @@ sonar {
 
     // Kover cannot instrument Kotlin/Wasm or Kotlin/Native, and @Composable functions emit
     // synthetic branches JaCoCo cannot filter. The entrypoints wire real platform stacks that
-    // no test starts. All of these stay analyzed for code quality.
+    // no test starts. CI scripts under .github are checked by the job that runs them. All of
+    // these stay analyzed for code quality.
     property(
       "sonar.coverage.exclusions",
       "**/build/**,**/generated/**,**/*.gradle.kts,**/R.java,**/BuildConfig.java,**/*Manifest*.xml," +
-        "**/wasmJsMain/**,**/iosMain/**,**/androidMain/**,**/ui/**,**/main.kt,**/Main.kt",
+        "**/wasmJsMain/**,**/iosMain/**,**/androidMain/**,**/ui/**,**/main.kt,**/Main.kt,.github/**",
     )
   }
 }
