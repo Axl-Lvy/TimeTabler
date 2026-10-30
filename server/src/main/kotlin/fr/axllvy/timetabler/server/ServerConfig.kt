@@ -31,7 +31,10 @@ data class ServerConfig(
         port = env["TT_PORT"]?.toInt() ?: 8080,
         staticDir = env["TT_STATIC_DIR"]?.let(::File),
         posterDir = Path.of(env["TT_POSTER_DIR"] ?: "/data/posters"),
-        removalRetention = env["TT_REMOVAL_RETENTION"]?.let(Duration::parse) ?: 30.days,
+        removalRetention =
+          (env["TT_REMOVAL_RETENTION"]?.let(Duration::parse) ?: 30.days).also {
+            require(it.isPositive()) { "TT_REMOVAL_RETENTION must be positive, was $it" }
+          },
       )
     }
   }

@@ -182,10 +182,18 @@ class EventStoreTest {
   }
 
   @Test
+  fun `a feed with nothing purged names no purged removal`() {
+    store.upsert(listing("new"))
+
+    val page = store.page(Revision.ZERO, 100)
+
+    page.purgedThrough shouldBe Revision.ZERO
+  }
+
+  @Test
   fun `the feed names the newest purged removal`() {
     store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z")))
     store.upsert(listing("new"))
-    store.page(Revision.ZERO, 100).purgedThrough shouldBe Revision.ZERO
     store.archiveBefore(LocalDate(2026, 10, 29))
     val removal = store.page(Revision.ZERO, 100).next
 

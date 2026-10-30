@@ -1,5 +1,6 @@
 package fr.axllvy.timetabler.server
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 import kotlin.time.Duration.Companion.days
@@ -22,5 +23,12 @@ class ServerConfigTest {
     val config = ServerConfig.fromEnv(required + ("TT_REMOVAL_RETENTION" to "36h"))
 
     config.removalRetention shouldBe 36.hours
+  }
+
+  @Test
+  fun `a removal retention that is not positive is refused`() {
+    val env = required + ("TT_REMOVAL_RETENTION" to "-1d")
+
+    shouldThrow<IllegalArgumentException> { ServerConfig.fromEnv(env) }
   }
 }
