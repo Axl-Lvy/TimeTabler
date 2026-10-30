@@ -223,6 +223,8 @@ Whole run 7.4 s; container peak memory 948 MB (cgroup `memory.peak`, includes Py
 
 DICE from the mini PC with plain HTTP: venue page `dice.fm/venue/trabendo-eo56` 200 with `__NEXT_DATA__`. `dice.fm/browse/paris` redirects (301) to `dice.fm/browse/paris-5b23e8a0e63cc224a4c36a2d`, whose `pageProps` hold `events` and a `nextCursor`, so the agenda paginates by cursor, not page number.
 
+The cursor's next page is only reachable through `api.dice.fm/unified_search`, which answered 403 on 2026-10-30 even with DICE's `Origin` and `Referer` headers, so it is not used. A browse page shows at most 24 events; when a day overflows, the scraper reads that day's sub-genre pages (`secondaryFilters`), which together held every event of Halloween 2026 (party 22/22, gig 21/21).
+
 ## Prerequisites the owner does by hand
 
 - Create the public GitHub repo `Axl-Lvy/TimeTabler`.
