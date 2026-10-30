@@ -4,6 +4,7 @@ import fr.axllvy.timetabler.domain.Revision
 import fr.axllvy.timetabler.server.PostgresTestDb
 import fr.axllvy.timetabler.server.events.EventStore
 import fr.axllvy.timetabler.server.events.ScrapedListing
+import fr.axllvy.timetabler.server.health.ScrapeRuns
 import fr.axllvy.timetabler.server.offlineFetcher
 import fr.axllvy.timetabler.server.posters.PosterCache
 import fr.axllvy.timetabler.server.timeTablerModule
@@ -18,14 +19,21 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
 import kotlin.io.path.createTempDirectory
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.time.Instant
 
 class EventRoutesTest {
 
-  private val store = EventStore(PostgresTestDb.freshDataSource())
+  private val db = PostgresTestDb.freshDataSource()
+  private val store = EventStore(db)
 
-  private fun stored(id: String) =
+  @AfterTest
+  fun close() {
+    db.close()
+  }
+
+  private suspend fun stored(id: String) =
     store.upsert(
       ScrapedListing(
         Source.DICE,
@@ -48,6 +56,7 @@ class EventRoutesTest {
         timeTablerModule(
           store,
           PosterCache(createTempDirectory(), offlineFetcher()),
+          ScrapeRuns(store),
           staticDir = null,
         )
       }

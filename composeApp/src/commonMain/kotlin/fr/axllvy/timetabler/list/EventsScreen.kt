@@ -49,14 +49,15 @@ fun EventsScreen(onOpen: (EventId) -> Unit) {
   val events by store.events().collectAsState(initial = null)
   val syncState by sync.state.collectAsState()
   var hasEverSynced by remember { mutableStateOf(true) }
+  var refreshing by remember { mutableStateOf(false) }
   var query by rememberSaveable { mutableStateOf("") }
   var filter by rememberSaveable { mutableStateOf(QuickFilter.ALL) }
   LaunchedEffect(syncState) { hasEverSynced = store.hasEverSynced() }
 
-  val now = Clock.System.now()
+  val currentNight by remember { tonightUpdates() }.collectAsState(tonight(Clock.System.now()))
   val groups =
-    remember(events, query, filter, now.epochSeconds / 60) {
-      filterEvents(events.orEmpty(), query, filter, now)
+    remember(events, query, filter, currentNight) {
+      filterEvents(events.orEmpty(), query, filter, currentNight)
     }
 
   Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
@@ -85,8 +86,18 @@ fun EventsScreen(onOpen: (EventId) -> Unit) {
       }
     }
     PullToRefreshBox(
-      isRefreshing = syncState == SyncState.SYNCING && events != null,
-      onRefresh = { scope.launch { sync.syncOnce() } },
+      // Only a pull shows the indicator; the periodic background sync stays silent.
+      isRefreshing = refreshing,
+      onRefresh = {
+        scope.launch {
+          refreshing = true
+          try {
+            sync.syncOnce()
+          } finally {
+            refreshing = false
+          }
+        }
+      },
       modifier = Modifier.fillMaxSize(),
     ) {
       when {
@@ -99,11 +110,10 @@ fun EventsScreen(onOpen: (EventId) -> Unit) {
             contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
           ) {
-            val tonight = tonight(now)
             groups.forEach { group ->
               item(key = group.night.toString()) {
                 Text(
-                  nightLabel(group.night, tonight).uppercase(),
+                  nightLabel(group.night, currentNight).uppercase(),
                   style = MaterialTheme.typography.labelMedium,
                   color = MaterialTheme.colorScheme.primary,
                   modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),

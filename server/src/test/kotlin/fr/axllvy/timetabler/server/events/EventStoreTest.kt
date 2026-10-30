@@ -2,6 +2,7 @@ package fr.axllvy.timetabler.server.events
 
 import fr.axllvy.timetabler.domain.Revision
 import fr.axllvy.timetabler.server.PostgresTestDb
+import fr.axllvy.timetabler.server.posters.posterVersion
 import fr.axllvy.timetabler.wire.ListingStatus
 import fr.axllvy.timetabler.wire.Source
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -9,11 +10,13 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 
 class EventStoreTest {
@@ -23,8 +26,13 @@ class EventStoreTest {
     object : Clock {
       override fun now() = now
     }
-  private val dataSource = PostgresTestDb.freshDataSource()
-  private val store = EventStore(dataSource, clock)
+  private val db = PostgresTestDb.freshDataSource()
+  private val store = EventStore(db, clock)
+
+  @AfterTest
+  fun close() {
+    db.close()
+  }
 
   private fun listing(
     id: String,
@@ -46,7 +54,7 @@ class EventStoreTest {
       lineup = emptyList(),
     )
 
-  private fun drain(): List<Pair<String, Revision>> = buildList {
+  private suspend fun drain(): List<Pair<String, Revision>> = buildList {
     var since = Revision.ZERO
     do {
       val page = store.page(since, 100)
@@ -56,7 +64,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `a new listing becomes an event in the feed`() {
+  fun `a new listing becomes an event in the feed`() = runTest {
     val id = store.upsert(listing("a")).id
     store.setLineup(Source.DICE, "a", listOf("I Hate Models", "Narciss"))
 
@@ -67,12 +75,12 @@ class EventStoreTest {
     event.nightDate shouldBe LocalDate(2026, 10, 30)
     event.venue.name shouldBe "La Machine du Moulin Rouge"
     event.lineup shouldBe listOf("I Hate Models", "Narciss")
-    event.posterPath shouldBe "/v1/posters/${id.value}"
+    event.posterPath shouldBe "/v1/posters/${id.value}?v=${posterVersion("https://img/a.jpg")}"
     event.listings.single().url shouldBe "https://dice.fm/event/a"
   }
 
   @Test
-  fun `an identical listing does not change the revision`() {
+  fun `an identical listing does not change the revision`() = runTest {
     store.upsert(listing("a"))
     val before = store.page(Revision.ZERO, 100).events.single().revision
 
@@ -83,7 +91,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `a changed lineup bumps the revision past every other`() {
+  fun `a changed lineup bumps the revision past every other`() = runTest {
     store.upsert(listing("a"))
     store.upsert(listing("b"))
     val highest = store.page(Revision.ZERO, 100).next
@@ -96,7 +104,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `setting the same lineup again changes nothing`() {
+  fun `setting the same lineup again changes nothing`() = runTest {
     store.upsert(listing("a"))
     store.setLineup(Source.DICE, "a", listOf("Kmyle"))
     val highest = store.page(Revision.ZERO, 100).next
@@ -107,14 +115,14 @@ class EventStoreTest {
   }
 
   @Test
-  fun `a changed title reports a change`() {
+  fun `a changed title reports a change`() = runTest {
     store.upsert(listing("a"))
 
     store.upsert(listing("a", title = "Renamed")).changed shouldBe true
   }
 
   @Test
-  fun `venue names differing in case share one venue`() {
+  fun `venue names differing in case share one venue`() = runTest {
     store.upsert(listing("a", venue = "La Machine du Moulin Rouge"))
     store.upsert(listing("b", venue = "la machine du moulin rouge"))
 
@@ -123,7 +131,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `paging while an event changes misses nothing`() {
+  fun `paging while an event changes misses nothing`() = runTest {
     (1..5).forEach { store.upsert(listing("e$it")) }
 
     val first = store.page(Revision.ZERO, 2)
@@ -142,7 +150,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `archiving moves old events to removed`() {
+  fun `archiving moves old events to removed`() = runTest {
     val old = store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z"))).id
     store.upsert(listing("new"))
     val highest = store.page(Revision.ZERO, 100).next
@@ -157,7 +165,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `a fresh client gets no removals older than the cutoff`() {
+  fun `a fresh client gets no removals older than the cutoff`() = runTest {
     store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z")))
     store.upsert(listing("new"))
     store.archiveBefore(LocalDate(2026, 10, 29))
@@ -171,7 +179,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `removals newer than the cutoff stay in the feed`() {
+  fun `removals newer than the cutoff stay in the feed`() = runTest {
     val old = store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z"))).id
     store.archiveBefore(LocalDate(2026, 10, 29))
 
@@ -182,7 +190,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `a feed with nothing purged names no purged removal`() {
+  fun `a feed with nothing purged names no purged removal`() = runTest {
     store.upsert(listing("new"))
 
     val page = store.page(Revision.ZERO, 100)
@@ -191,7 +199,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `the feed names the newest purged removal`() {
+  fun `the feed names the newest purged removal`() = runTest {
     store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z")))
     store.upsert(listing("new"))
     store.archiveBefore(LocalDate(2026, 10, 29))
@@ -203,7 +211,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `a purged event seen again comes back as a new event`() {
+  fun `a purged event seen again comes back as a new event`() = runTest {
     val old = store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z"))).id
     store.archiveBefore(LocalDate(2026, 10, 29))
     store.purgeRemovedBefore(now + 1.seconds)
@@ -215,7 +223,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `a listing missing from a covered day is gone from the feed`() {
+  fun `a listing missing from a covered day is gone from the feed`() = runTest {
     store.upsert(listing("kept"))
     val gone = store.upsert(listing("gone")).id
     val highest = store.page(Revision.ZERO, 100).next
@@ -228,7 +236,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `listings on days the run did not cover stay`() {
+  fun `listings on days the run did not cover stay`() = runTest {
     store.upsert(listing("later", startsAt = Instant.parse("2026-11-02T22:00:00Z")))
 
     val marked = store.markGone(Source.DICE, emptySet(), setOf(LocalDate(2026, 10, 30)), now)
@@ -239,7 +247,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `a listing that already started stays`() {
+  fun `a listing that already started stays`() = runTest {
     store.upsert(listing("started", startsAt = now - 1.hours))
 
     val marked = store.markGone(Source.DICE, emptySet(), setOf(LocalDate(2026, 10, 30)), now)
@@ -250,7 +258,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `a gone listing seen again brings its event back`() {
+  fun `a gone listing seen again brings its event back`() = runTest {
     val id = store.upsert(listing("back")).id
     store.markGone(Source.DICE, emptySet(), setOf(LocalDate(2026, 10, 30)), now)
     val highest = store.page(Revision.ZERO, 100).next
@@ -263,9 +271,9 @@ class EventStoreTest {
   }
 
   @Test
-  fun `an event keeps its other listings when one is gone`() {
+  fun `an event keeps its other listings when one is gone`() = runTest {
     val id = store.upsert(listing("a")).id
-    dataSource.connection.use { c ->
+    db.connection.use { c ->
       c.createStatement()
         .execute(
           """INSERT INTO listing (id, event_id, source, external_id, url, raw_title, starts_at, status,
@@ -284,7 +292,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `gone listings are not refreshed`() {
+  fun `gone listings are not refreshed`() = runTest {
     store.upsert(listing("gone", startsAt = now + 20.hours))
     store.markGone(Source.DICE, emptySet(), setOf(LocalDate(2026, 10, 31)), now)
 
@@ -294,7 +302,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `lists listings starting soon`() {
+  fun `lists listings starting soon`() = runTest {
     store.upsert(listing("soon", startsAt = now + 20.hours))
     store.upsert(listing("later", startsAt = now + 60.hours))
     store.upsert(listing("past", startsAt = now - 30.hours))
@@ -303,7 +311,7 @@ class EventStoreTest {
   }
 
   @Test
-  fun `listings whose lineup was never read need one`() {
+  fun `listings whose lineup was never read need one`() = runTest {
     store.upsert(listing("read"))
     store.upsert(listing("unread"))
     store.upsert(listing("old", startsAt = Instant.parse("2026-10-27T22:00:00Z")))
@@ -315,9 +323,10 @@ class EventStoreTest {
   }
 
   @Test
-  fun `every database has its own stable epoch`() {
+  fun `every database has its own stable epoch`() = runTest {
     val first = store.page(Revision.ZERO, 10).epoch
-    val other = EventStore(PostgresTestDb.freshDataSource(), clock).page(Revision.ZERO, 10).epoch
+    val other =
+      PostgresTestDb.freshDataSource().use { EventStore(it, clock).page(Revision.ZERO, 10).epoch }
 
     first.isNotBlank() shouldBe true
     store.page(Revision.ZERO, 10).epoch shouldBe first
@@ -325,7 +334,27 @@ class EventStoreTest {
   }
 
   @Test
-  fun `knows the poster url of an event`() {
+  fun `a new poster url gives a new poster path`() = runTest {
+    store.upsert(listing("a"))
+    val before = store.page(Revision.ZERO, 100).events.single().posterPath
+
+    store.upsert(listing("a").copy(posterUrl = "https://img/a-v2.jpg"))
+
+    (store.page(Revision.ZERO, 100).events.single().posterPath == before) shouldBe false
+  }
+
+  @Test
+  fun `lists the posters of events starting soon`() = runTest {
+    val soon = store.upsert(listing("soon", startsAt = now + 20.hours)).id
+    store.upsert(listing("later", startsAt = now + 60.hours))
+    store.upsert(listing("bare", startsAt = now + 10.hours).copy(posterUrl = null))
+
+    store.postersStartingWithin(48.hours) shouldContainExactly
+      listOf(PosterRef(soon, "https://img/soon.jpg"))
+  }
+
+  @Test
+  fun `knows the poster url of an event`() = runTest {
     val id = store.upsert(listing("a")).id
 
     store.posterUrl(id) shouldBe "https://img/a.jpg"
