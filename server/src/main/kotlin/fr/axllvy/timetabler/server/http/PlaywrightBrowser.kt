@@ -19,6 +19,9 @@ import kotlinx.coroutines.withContext
 // Not needed to read a page; skipping them spares the host and the browser's memory.
 private val SKIPPED_RESOURCES = setOf("image", "media", "font")
 
+// Playwright reports a driver error as "Error {", then "  message='<what failed>" on the next line.
+private val DRIVER_MESSAGE = Regex("""message='([^\n]*)""")
+
 /**
  * Headless Chromium driven by Playwright. A session launches the browser, loads one page at a time
  * at least [minInterval] apart, and closes the browser when it ends.
@@ -35,7 +38,8 @@ class PlaywrightBrowser(
       Executors.newSingleThreadExecutor { Thread(it, "playwright").apply { isDaemon = true } }
         .asCoroutineDispatcher()
     try {
-      val playwright = withContext(thread) { Playwright.create() }
+      // Not cancellable, or a cancellation during the launch would orphan the driver process.
+      val playwright = withContext(NonCancellable + thread) { Playwright.create() }
       try {
         val page = withContext(thread) { openPage(playwright) }
         var last: TimeMark? = null
@@ -83,6 +87,13 @@ class PlaywrightBrowser(
         else -> FetchResult.Failed(response.status(), response.statusText())
       }
     } catch (e: PlaywrightException) {
-      FetchResult.Failed(null, e.message?.lineSequence()?.first() ?: "browser error")
+      FetchResult.Failed(null, reason(e))
     }
+
+  private fun reason(e: PlaywrightException): String {
+    val text = e.message.orEmpty()
+    return DRIVER_MESSAGE.find(text)?.groupValues?.get(1)?.removeSuffix("'")
+      ?: text.lineSequence().firstOrNull { it.isNotBlank() }
+      ?: "browser error"
+  }
 }

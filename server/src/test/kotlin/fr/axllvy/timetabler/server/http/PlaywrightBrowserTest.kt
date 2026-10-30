@@ -1,8 +1,10 @@
 package fr.axllvy.timetabler.server.http
 
 import io.kotest.matchers.comparables.shouldBeGreaterThanOrEqualTo
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldStartWith
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -19,6 +21,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
 
@@ -47,6 +50,10 @@ class PlaywrightBrowserTest {
             call.respondBytes(ByteArray(0), ContentType.Image.PNG)
           }
           get("/busy") { call.respondText("slow down", status = HttpStatusCode.TooManyRequests) }
+          get("/slow") {
+            delay(3.seconds)
+            call.respondText("late", ContentType.Text.Html)
+          }
         }
       }
       .start(wait = false)
@@ -81,6 +88,18 @@ class PlaywrightBrowserTest {
       val result = browser.session { it.load("$baseUrl/busy") }
 
       result.shouldBeInstanceOf<FetchResult.Failed>().status shouldBe 429
+    }
+
+  @Test
+  fun `a timeout is a failed load without status`() =
+    runBlocking<Unit> {
+      val browser = PlaywrightBrowser("TimeTabler/test", timeout = 1.seconds)
+
+      val result = browser.session { it.load("$baseUrl/slow") }
+
+      val failed = result.shouldBeInstanceOf<FetchResult.Failed>()
+      failed.status.shouldBeNull()
+      failed.reason shouldStartWith "Timeout"
     }
 
   @Test
