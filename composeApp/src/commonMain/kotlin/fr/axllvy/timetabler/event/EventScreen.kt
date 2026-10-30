@@ -149,4 +149,5 @@ private fun Source.label(): String =
   when (this) {
     Source.DICE -> "DICE"
     Source.SHOTGUN -> "Shotgun"
+    Source.UNKNOWN -> "Tickets"
   }

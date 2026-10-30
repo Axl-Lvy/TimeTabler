@@ -38,6 +38,7 @@ dependencies {
   implementation(libs.ktor.server.netty)
   implementation(libs.ktor.server.content.negotiation)
   implementation(libs.ktor.server.status.pages)
+  implementation(libs.ktor.server.auto.head.response)
   implementation(libs.ktor.serialization.kotlinx.json)
   runtimeOnly(libs.slf4j.simple)
 

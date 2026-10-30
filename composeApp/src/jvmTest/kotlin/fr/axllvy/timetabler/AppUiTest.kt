@@ -39,7 +39,9 @@ import kotlin.test.Test
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
+import org.koin.dsl.koinApplication
 import org.koin.dsl.module
 
 @OptIn(ExperimentalTestApi::class)
@@ -113,6 +115,66 @@ class AppUiTest {
     onNodeWithText("I Hate Models").assertExists()
     onNodeWithText("Narciss").assertExists()
     onNodeWithText("No set times yet", substring = true).assertExists()
+  }
+
+  private fun storeOneEvent(title: String) = runBlocking {
+    val startsAt = Clock.System.now() + 10.hours
+    store.apply(
+      EventsPage(
+        listOf(
+          EventDto(
+            EventId("e1"),
+            Revision(1),
+            title,
+            nightDateOf(startsAt),
+            startsAt,
+            null,
+            VenueDto("Rex Club", null),
+            emptyList(),
+            null,
+            emptyList(),
+          )
+        ),
+        emptyList(),
+        Revision(1),
+        hasMore = false,
+      )
+    )
+  }
+
+  @Test
+  fun `a background sync shows no refresh indicator`() = runComposeUiTest {
+    storeOneEvent("Possession")
+    val hangingSync =
+      EventSync(EventsApi(HttpClient(MockEngine { awaitCancellation() }), ""), store)
+    setContent {
+      App(
+        listOf(
+          module {
+            single<EventStoreLocal> { store }
+            single { hangingSync }
+          }
+        )
+      )
+    }
+
+    waitUntil("Possession shown while syncing", timeoutMillis = 5_000) {
+      hangingSync.state.value == SyncState.SYNCING &&
+        onAllNodesWithText("Possession").fetchSemanticsNodes().isNotEmpty()
+    }
+    onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo))
+      .assertCountEquals(0)
+  }
+
+  @Test
+  fun `the app syncs through the koin application it is given`() = runComposeUiTest {
+    val koin = koinApplication { modules(testModules) }
+
+    setContent { App(koin) }
+
+    waitUntil("given sync went offline", timeoutMillis = 5_000) {
+      koin.koin.get<EventSync>().state.value == SyncState.OFFLINE
+    }
   }
 
   @Test

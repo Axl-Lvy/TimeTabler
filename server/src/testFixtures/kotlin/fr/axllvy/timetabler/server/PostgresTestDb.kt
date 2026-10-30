@@ -4,7 +4,6 @@ import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import fr.axllvy.timetabler.server.db.applySchema
 import java.util.concurrent.atomic.AtomicInteger
-import javax.sql.DataSource
 import org.testcontainers.containers.PostgreSQLContainer
 
 /** One Postgres container for the whole test run, handing each caller its own empty database. */
@@ -13,16 +12,14 @@ object PostgresTestDb {
   private val container by lazy {
     PostgreSQLContainer("postgres:16-alpine").apply {
       withReuse(false)
-      // Every test class opens its own small pool and the run never closes them.
-      withCommand("postgres", "-c", "max_connections=1000")
       start()
     }
   }
 
   private val counter = AtomicInteger()
 
-  /** A pooled data source on a new database with the schema applied. */
-  fun freshDataSource(): DataSource {
+  /** A pooled data source on a new database with the schema applied; the caller closes it. */
+  fun freshDataSource(): HikariDataSource {
     val name = "tt_${counter.incrementAndGet()}"
     container.createConnection("").use { it.createStatement().execute("CREATE DATABASE $name") }
     return HikariDataSource(

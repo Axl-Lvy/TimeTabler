@@ -118,7 +118,8 @@ Every screenshot keeps its uploader so that opening uploads to the public later 
 - **Politeness:** at most one request every 2 seconds per host, a descriptive User-Agent, conditional requests and a content-hash cache so unchanged pages are not re-parsed. Prefer page data (`__NEXT_DATA__`, JSON-LD) over internal APIs.
 - **Schedule (krontab, inside the server):** the full agenda from both sources once a day at night; event pages for events in the next 48 hours every 3 hours. A scraper failure is logged and leaves the previous data in place.
 - **Change tracking:** each listing keeps its content hash and lineup history, so a later notification step can detect "lineup changed" without new scraping work.
-- **Window:** events from yesterday to 60 days ahead are kept active; older events stay in the database but leave the client sync window.
+- **Window:** events from yesterday to 60 days ahead are kept active; older events leave the client sync window as removals. A removed event is deleted from the database after `TT_REMOVAL_RETENTION` (default 30 days), and a client that synced before the newest deleted removal starts over from zero.
+- **Delistings:** after an agenda run that read every page, a listing it did not see is marked gone, only on days where no page overflowed or hid an event, and only if it had not started. An event left with no live listing is removed from the feed; a gone listing seen again brings it back.
 
 ### Matching DICE and Shotgun listings into one event
 
@@ -157,9 +158,9 @@ Available in the app only when the logged-in account has the admin role. It lets
 ### Server API (shape, names are the builder's)
 
 - `GET /v1/events?since=<revision>&limit=`: pages of events, listings, lineups and timetables changed since a server-assigned revision, ordered by revision, plus tombstones for events that left the window or were merged. Read-only for clients.
-- `GET /v1/posters/{id}`: poster images, fetched from DICE or Shotgun once, resized and cached by the server.
+- `GET /v1/posters/{id}?v=<hash of the source URL>`: poster images, fetched from DICE or Shotgun once per source URL, resized, flattened onto the theme background and cached by the server. A source that fails is retried after an hour; posters of events in the next 48 hours are prefetched by the 3-hourly refresh. The `v` query changes with the source, so client caches pick up a new poster.
 - Admin routes: upload a screenshot, read extraction status, edit a timetable, merge and split events.
-- `GET /health`.
+- `GET /health`: always 200 while the server runs, with the last run of each scrape job (attempt and success times, failures in a row, pages, listings, upserts, lineups, last agenda day) as JSON for the home-lab exporter.
 
 ### Clients
 

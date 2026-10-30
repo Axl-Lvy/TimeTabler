@@ -17,7 +17,9 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -63,5 +65,42 @@ class SyncE2eTest {
     val expected = server.store.page(Revision.ZERO, 2000).events
     local.events().first().sortedBy { it.id.value } shouldBe expected.sortedBy { it.id.value }
     local.lastRevision() shouldBe server.store.page(Revision.ZERO, 2000).next
+  }
+
+  @Test
+  fun `a client that missed a purged removal drops the event`(): Unit = runBlocking {
+    server.store.upsert(listing("old", Instant.parse("2026-11-01T22:00:00Z")))
+    server.store.upsert(listing("kept", Instant.parse("2026-11-05T22:00:00Z")))
+    val local = RoomEventStore(buildDatabase(Room.inMemoryDatabaseBuilder<TimeTablerDatabase>()))
+    val sync = EventSync(EventsApi(HttpClient(CIO), server.baseUrl), local)
+    sync.syncOnce()
+    server.store.archiveBefore(LocalDate(2026, 11, 2))
+    server.store.purgeRemovedBefore(Clock.System.now() + 1.seconds)
+    server.store.upsert(listing("added", Instant.parse("2026-11-06T22:00:00Z")))
+
+    val outcome = sync.syncOnce()
+
+    outcome shouldBe SyncOutcome.Ok
+    local.events().first().map { it.title }.sorted() shouldBe listOf("Night added", "Night kept")
+  }
+
+  @Test
+  fun `a listing gone from its source disappears from the client`(): Unit = runBlocking {
+    server.store.upsert(listing("kept", Instant.parse("2026-11-05T22:00:00Z")))
+    server.store.upsert(listing("gone", Instant.parse("2026-11-05T23:00:00Z")))
+    val local = RoomEventStore(buildDatabase(Room.inMemoryDatabaseBuilder<TimeTablerDatabase>()))
+    val sync = EventSync(EventsApi(HttpClient(CIO), server.baseUrl), local)
+    sync.syncOnce()
+    server.store.markGone(
+      Source.DICE,
+      setOf("kept"),
+      setOf(LocalDate(2026, 11, 5), LocalDate(2026, 11, 6)),
+      startingFrom = Instant.parse("2026-01-01T00:00:00Z"),
+    )
+
+    val outcome = sync.syncOnce()
+
+    outcome shouldBe SyncOutcome.Ok
+    local.events().first().map { it.title } shouldBe listOf("Night kept")
   }
 }

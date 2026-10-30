@@ -2,8 +2,13 @@ package fr.axllvy.timetabler.domain
 
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
+import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
+import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 
 /** Time zone of every local date and time in TimeTabler. */
@@ -22,3 +27,9 @@ fun nightDateOf(start: Instant): LocalDate = (start - NIGHT_SHIFT).toLocalDateTi
 
 /** Date of the night in progress at [now]. */
 fun tonight(now: Instant): LocalDate = nightDateOf(now)
+
+/**
+ * Instant at which [night] ends and [tonight] moves on: six hours after the next Paris midnight.
+ */
+fun nightEnd(night: LocalDate): Instant =
+  LocalDateTime(night.plus(DatePeriod(days = 1)), LocalTime(0, 0)).toInstant(PARIS) + NIGHT_SHIFT

@@ -3,6 +3,7 @@ package fr.axllvy.timetabler.server.routes
 import fr.axllvy.timetabler.server.PostgresTestDb
 import fr.axllvy.timetabler.server.events.EventStore
 import fr.axllvy.timetabler.server.events.ScrapedListing
+import fr.axllvy.timetabler.server.health.ScrapeRuns
 import fr.axllvy.timetabler.server.http.PoliteFetcher
 import fr.axllvy.timetabler.server.posters.PosterCache
 import fr.axllvy.timetabler.server.timeTablerModule
@@ -24,12 +25,15 @@ import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
 import kotlin.io.path.createTempDirectory
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.time.Instant
+import kotlinx.coroutines.runBlocking
 
 class PosterRoutesTest {
 
-  private val store = EventStore(PostgresTestDb.freshDataSource())
+  private val db = PostgresTestDb.freshDataSource()
+  private val store = EventStore(db)
   private var sourceRequests = 0
   private val png =
     ByteArrayOutputStream()
@@ -49,7 +53,7 @@ class PosterRoutesTest {
       "TimeTabler/test",
     )
 
-  private val eventId =
+  private val eventId = runBlocking {
     store
       .upsert(
         ScrapedListing(
@@ -67,11 +71,22 @@ class PosterRoutesTest {
         )
       )
       .id
+  }
+
+  @AfterTest
+  fun close() {
+    db.close()
+  }
 
   private fun app(test: suspend io.ktor.server.testing.ApplicationTestBuilder.() -> Unit) =
     testApplication {
       application {
-        timeTablerModule(store, PosterCache(createTempDirectory(), fetcher), staticDir = null)
+        timeTablerModule(
+          store,
+          PosterCache(createTempDirectory(), fetcher),
+          ScrapeRuns(store),
+          staticDir = null,
+        )
       }
       test()
     }

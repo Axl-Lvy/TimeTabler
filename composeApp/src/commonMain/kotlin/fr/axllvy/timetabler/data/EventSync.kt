@@ -1,12 +1,17 @@
 package fr.axllvy.timetabler.data
 
 import co.touchlab.kermit.Logger
+import fr.axllvy.timetabler.domain.Revision
+import fr.axllvy.timetabler.wire.WIRE_SCHEMA_VERSION
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+
+// Stores synced before the schema version was recorded hold version 1 events.
+private const val UNVERSIONED_SCHEMA = 1
 
 /** Result of one sync attempt. */
 sealed interface SyncOutcome {
@@ -35,19 +40,33 @@ class EventSync(private val api: EventsApi, private val store: EventStoreLocal) 
   val state: StateFlow<SyncState> = _state.asStateFlow()
 
   /**
-   * Applies every feed page after the stored revision; concurrent calls run one after another. A
-   * page from a new server epoch clears the store and starts again from the first revision.
+   * Applies every feed page after the stored revision; concurrent calls run one after another.
+   * Events stored in another wire schema, a page from a new server epoch, or a page saying removals
+   * after the revision this run resumed from were purged, clear the store and start again from the
+   * first revision.
    */
   suspend fun syncOnce(): SyncOutcome = running.withLock {
     _state.value = SyncState.SYNCING
     try {
+      val stored = store.schemaVersion() ?: UNVERSIONED_SCHEMA
+      if (store.hasEverSynced() && stored != WIRE_SCHEMA_VERSION) {
+        startOver("Stored events use another wire schema")
+      }
+      // Pages fetched within this run deliver every removal after it, so only this one can be
+      // stale.
+      var resumedFrom = store.lastRevision()
       while (true) {
         val page = api.page(store.lastRevision())
         val epoch = store.epoch()
         if (epoch != null && epoch != page.epoch) {
           // The server database was restored or reseeded: its revisions no longer match ours.
-          log.i { "Server epoch changed, syncing from scratch" }
-          store.clear()
+          startOver("Server epoch changed")
+          resumedFrom = Revision.ZERO
+          continue
+        }
+        if (resumedFrom > Revision.ZERO && resumedFrom < page.purgedThrough) {
+          startOver("Removals newer than the stored revision were purged")
+          resumedFrom = Revision.ZERO
           continue
         }
         store.apply(page)
@@ -64,5 +83,10 @@ class EventSync(private val api: EventsApi, private val store: EventStoreLocal) 
       _state.value = SyncState.OFFLINE
       SyncOutcome.Offline(e.message ?: e::class.simpleName.orEmpty())
     }
+  }
+
+  private suspend fun startOver(reason: String) {
+    log.i { "$reason, syncing from scratch" }
+    store.clear()
   }
 }

@@ -18,6 +18,7 @@ import io.ktor.client.engine.mock.respondError
 import io.ktor.client.request.HttpRequestData
 import io.ktor.client.request.HttpResponseData
 import io.ktor.http.HttpStatusCode
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -32,7 +33,8 @@ class DiceScraperTest {
     object : Clock {
       override fun now() = now
     }
-  private val store = EventStore(PostgresTestDb.freshDataSource(), clock)
+  private val db = PostgresTestDb.freshDataSource()
+  private val store = EventStore(db, clock)
   private val baron = "6ae30f3eff6a4e000149d810"
   private val emptyDay =
     """<script id="__NEXT_DATA__">{"props":{"pageProps":{"events":[],"nextCursor":null}}}</script>"""
@@ -56,6 +58,11 @@ class DiceScraperTest {
     return """<script id="__NEXT_DATA__">{"props":{"pageProps":{"events":[$events],"nextCursor":$cursor,"secondaryFilters":[$filters]}}}</script>"""
   }
 
+  @AfterTest
+  fun close() {
+    db.close()
+  }
+
   private fun TestScope.scraper(
     route: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData? = { null }
   ): DiceScraper {
@@ -76,7 +83,7 @@ class DiceScraperTest {
     return DiceScraper(fetcher, store, clock)
   }
 
-  private fun storedTitles() = store.page(Revision.ZERO, 1000).events.map { it.title }
+  private suspend fun storedTitles() = store.page(Revision.ZERO, 1000).events.map { it.title }
 
   @Test
   fun `stores every listing of the window with its lineup`() = runTest {
@@ -85,6 +92,9 @@ class DiceScraperTest {
     report.failed.shouldBeNull()
     report.upserted shouldBe 5
     report.pages shouldBe 61 * DICE_CATEGORIES.size
+    report.lineups shouldBe 5
+    report.listings shouldBe 5
+    report.lastDay shouldBe LocalDate(2027, 1, 6)
     storedTitles().size shouldBe 5
     store.page(Revision.ZERO, 1000).events.single { it.title.startsWith("Baron") }.lineup shouldBe
       listOf("Baron Von Trax", "Cattoni", "Gray", "MaaxD", "VolviK")
@@ -160,6 +170,7 @@ class DiceScraperTest {
       .scrapeAgenda()
 
     report.failed!! shouldContain "429"
+    report.lastDay.shouldBeNull()
     storedTitles().size shouldBe 5
     requested.filter { "/event/" in it }.shouldBeEmpty()
     store.page(Revision.ZERO, 1000).removed.shouldBeEmpty()
@@ -185,7 +196,7 @@ class DiceScraperTest {
     }
       .scrapeAgenda()
 
-    report.failed.shouldBeNull()
+    report.failed!! shouldContain "429"
     requested.count { "/event/" in it } shouldBe 1
   }
 
@@ -266,13 +277,117 @@ class DiceScraperTest {
       .size shouldBe 5
   }
 
+  private suspend fun TestScope.scrapeDjDay(vararg pages: String): ScrapeReport {
+    var report: ScrapeReport? = null
+    for (html in pages) {
+      report = scraper { if (it.url.toString() == djDay) respond(html) else null }.scrapeAgenda()
+    }
+    return report!!
+  }
+
+  @Test
+  fun `a listing missing from a complete scrape disappears from the feed`() = runTest {
+    scrapeDjDay(browsePage(listOf("a1", "b1")))
+    val highest = store.page(Revision.ZERO, 1000).next
+
+    val report = scrapeDjDay(browsePage(listOf("a1")))
+
+    report.gone shouldBe 1
+    store.page(highest, 1000).removed.size shouldBe 1
+    storedTitles() shouldContainExactlyInAnyOrder listOf("Night a1")
+  }
+
+  @Test
+  fun `a failed scrape removes nothing`() = runTest {
+    scrapeDjDay(browsePage(listOf("a1", "b1")))
+    val laterParty = DiceBrowseParser.dayUrl("party", LocalDate(2026, 11, 8))
+
+    val report = scraper {
+      when (it.url.toString()) {
+        djDay -> respond(browsePage(listOf("a1")))
+        laterParty -> respondError(HttpStatusCode.TooManyRequests)
+        else -> null
+      }
+    }
+      .scrapeAgenda()
+
+    report.failed!! shouldContain "429"
+    report.gone shouldBe 0
+    storedTitles() shouldContainExactlyInAnyOrder listOf("Night a1", "Night b1")
+    store.page(Revision.ZERO, 1000).removed.shouldBeEmpty()
+  }
+
+  @Test
+  fun `a day that overflows without sub-genres removes nothing`() = runTest {
+    scrapeDjDay(browsePage(listOf("a1", "b1")))
+
+    val report = scrapeDjDay(browsePage(listOf("a1"), overflow = true))
+
+    report.gone shouldBe 0
+    storedTitles() shouldContainExactlyInAnyOrder listOf("Night a1", "Night b1")
+  }
+
+  @Test
+  fun `an overflowing day removes nothing even with complete sub-genre pages`() = runTest {
+    scrapeDjDay(browsePage(listOf("a1", "b1")))
+
+    val report = scraper {
+      when (it.url.toString()) {
+        djDay -> respond(browsePage(listOf("a1"), overflow = true, subGenres = listOf(house)))
+        house -> respond(browsePage(listOf("a1")))
+        else -> null
+      }
+    }
+      .scrapeAgenda()
+
+    report.failed.shouldBeNull()
+    report.gone shouldBe 0
+    storedTitles() shouldContainExactlyInAnyOrder listOf("Night a1", "Night b1")
+  }
+
+  @Test
+  fun `a day page without a cursor removes nothing`() = runTest {
+    scrapeDjDay(browsePage(listOf("a1", "b1")))
+
+    val report = scrapeDjDay(browsePage(listOf("a1")).replace(",\"nextCursor\":null", ""))
+
+    report.failed.shouldBeNull()
+    report.gone shouldBe 0
+    storedTitles() shouldContainExactlyInAnyOrder listOf("Night a1", "Night b1")
+  }
+
+  @Test
+  fun `a day with an unreadable event removes nothing`() = runTest {
+    scrapeDjDay(browsePage(listOf("a1", "b1")))
+    val withBroken =
+      browsePage(listOf("a1")).replace("\"events\":[", "\"events\":[{\"id\":\"b1\"},")
+
+    val report = scrapeDjDay(withBroken)
+
+    report.gone shouldBe 0
+    storedTitles() shouldContainExactlyInAnyOrder listOf("Night a1", "Night b1")
+  }
+
+  @Test
+  fun `a scrape that sees no event at all removes nothing`() = runTest {
+    scrapeDjDay(browsePage(listOf("a1", "b1")))
+
+    val report = scrapeDjDay(emptyDay)
+
+    report.failed.shouldBeNull()
+    report.gone shouldBe 0
+    storedTitles() shouldContainExactlyInAnyOrder listOf("Night a1", "Night b1")
+  }
+
   @Test
   fun `refresh fetches only events starting in the next two days`() = runTest {
     scraper().scrapeAgenda()
     requested.clear()
 
-    scraper().refreshSoon()
+    val report = scraper().refreshSoon()
 
+    report.pages shouldBe 0
+    report.lineups shouldBe 5
     requested.map { it.substringAfterLast('/') } shouldContainExactlyInAnyOrder
       listOf(
         "6ad5f2180594730001f32ed4",
@@ -281,5 +396,18 @@ class DiceScraperTest {
         "6ac7bec70dbdde000190897f",
         "6ab11603d53a780001f34604",
       )
+  }
+
+  @Test
+  fun `a throttled refresh reports the failure`() = runTest {
+    scraper().scrapeAgenda()
+
+    val report = scraper {
+      if ("/event/" in it.url.toString()) respondError(HttpStatusCode.TooManyRequests) else null
+    }
+      .refreshSoon()
+
+    report.failed!! shouldContain "429"
+    report.lineups shouldBe 0
   }
 }

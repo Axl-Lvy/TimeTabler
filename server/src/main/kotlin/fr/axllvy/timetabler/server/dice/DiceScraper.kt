@@ -12,6 +12,7 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
@@ -19,8 +20,8 @@ private val RETRY_PAUSE = 10.seconds
 private const val HTTP_TOO_MANY_REQUESTS = 429
 
 /**
- * Summary of one scrape run; [failed] says why the run stopped early, null when it completed.
- * [overflowedSubGenres] counts sub-genre pages that still held more events than they show.
+ * Counts of one scrape run; [failed] says why it stopped early, null when it completed. [gone]
+ * counts the listings DICE no longer lists.
  */
 data class ScrapeReport(
   val pages: Int,
@@ -28,6 +29,11 @@ data class ScrapeReport(
   val failed: String?,
   val overflowedDays: Int = 0,
   val overflowedSubGenres: Int = 0,
+  val lineups: Int = 0,
+  val listings: Int = 0,
+  val lastDay: LocalDate? = null,
+  val posters: Int = 0,
+  val gone: Int = 0,
 )
 
 /** Scrapes DICE's Paris agenda into the [EventStore]. */
@@ -45,23 +51,42 @@ class DiceScraper(
     var upserted = 0
     var overflowedDays = 0
     var overflowedSubGenres = 0
+    var lineups = 0
+    val listings = HashSet<String>()
+    var lastDay: LocalDate? = null
+    var gone = 0
 
     fun report(failed: String?) =
-      ScrapeReport(pages, upserted, failed, overflowedDays, overflowedSubGenres)
+      ScrapeReport(
+        pages,
+        upserted,
+        failed,
+        overflowedDays,
+        overflowedSubGenres,
+        lineups,
+        listings.size,
+        lastDay,
+        gone = gone,
+      )
   }
 
   /**
    * Walks every day from today to [horizonDays] ahead in each music category, reading a day's
    * sub-genre pages when it holds more events than one page shows, then fetches the lineup of every
    * new or changed listing and of every listing whose lineup was never read. A failed agenda page
-   * stops the run without fetching lineups; a throttled lineup stops the rest.
+   * stops the run without fetching lineups; a throttled lineup stops the rest and fails the run. A
+   * run that read every page marks gone the listings it did not see, on days where no page
+   * overflowed or hid an event.
    */
   suspend fun scrapeAgenda(): ScrapeReport {
-    val today = clock.now().toLocalDateTime(PARIS).date
+    val startedAt = clock.now()
+    val today = startedAt.toLocalDateTime(PARIS).date
     val tally = Tally()
     val toFetch = linkedMapOf<String, ListingRef>()
+    val coveredDays = mutableSetOf<LocalDate>()
     for (offset in 0..horizonDays) {
       val day = today + DatePeriod(days = offset)
+      var covered = true
       for (category in DICE_CATEGORIES) {
         val page =
           when (val read = readPage(DiceBrowseParser.dayUrl(category, day), tally)) {
@@ -69,10 +94,14 @@ class DiceScraper(
             is PageRead.Failed -> return stopped(tally, read.reason)
           }
         var listings = page.listings
+        if (page.skipped > 0 || page.formatChanged) covered = false
         if (page.overflow) {
+          // An event without a sub-genre past the first page shows on no page at all.
+          covered = false
           tally.overflowedDays++
-          if (page.subGenreUrls.isEmpty())
+          if (page.subGenreUrls.isEmpty()) {
             log.w { "DICE $category on $day overflows with no sub-genres" }
+          }
           for (url in page.subGenreUrls) {
             val subPage =
               when (val read = readPage(url, tally)) {
@@ -87,6 +116,7 @@ class DiceScraper(
           }
         }
         for (listing in listings.distinctBy { it.externalId }) {
+          tally.listings += listing.externalId
           val result = store.upsert(listing)
           if (result.changed) {
             tally.upserted++
@@ -94,16 +124,23 @@ class DiceScraper(
           }
         }
       }
+      tally.lastDay = day
+      if (covered) coveredDays += day
     }
-    fetchLineups(withUnreadLineups(toFetch))
-    return tally.report(null)
+    // Seeing nothing at all more likely means DICE served empty pages than that every event left.
+    if (tally.listings.isNotEmpty()) {
+      tally.gone = store.markGone(Source.DICE, tally.listings, coveredDays, startedAt)
+    }
+    val lineups = fetchLineups(withUnreadLineups(toFetch))
+    tally.lineups = lineups.read
+    return tally.report(lineups.stopped)
   }
 
   /** Re-reads the lineup of every listing starting in the next 48 hours. */
   suspend fun refreshSoon(): ScrapeReport {
     val refs = store.listingsStartingWithin(48.hours).filter { it.source == Source.DICE }
-    fetchLineups(refs)
-    return ScrapeReport(refs.size, 0, null)
+    val lineups = fetchLineups(refs)
+    return ScrapeReport(pages = 0, upserted = 0, failed = lineups.stopped, lineups = lineups.read)
   }
 
   // Lineups are skipped too: a failing agenda usually means DICE wants us to back off.
@@ -130,7 +167,7 @@ class DiceScraper(
       ?: PageRead.Failed("$url: no page data")
   }
 
-  private fun withUnreadLineups(changed: Map<String, ListingRef>): Collection<ListingRef> =
+  private suspend fun withUnreadLineups(changed: Map<String, ListingRef>): Collection<ListingRef> =
     (changed.values + store.listingsNeedingLineup().filter { it.source == Source.DICE })
       .distinctBy { it.externalId }
 
@@ -143,18 +180,28 @@ class DiceScraper(
     return fetcher.get(url)
   }
 
-  private suspend fun fetchLineups(refs: Collection<ListingRef>) {
+  private class LineupRun(val read: Int, val stopped: String?)
+
+  private suspend fun fetchLineups(refs: Collection<ListingRef>): LineupRun {
+    var read = 0
     for (ref in refs) {
       when (val result = fetcher.get(ref.url)) {
-        is FetchResult.Ok ->
-          DiceEventParser.performers(result.body)?.let {
-            store.setLineup(ref.source, ref.externalId, it)
-          } ?: log.w { "No lineup data on ${ref.url}" }
+        is FetchResult.Ok -> {
+          val lineup = DiceEventParser.performers(result.body)
+          if (lineup == null) {
+            log.w { "No lineup data on ${ref.url}" }
+          } else {
+            store.setLineup(ref.source, ref.externalId, lineup)
+            read++
+          }
+        }
         is FetchResult.Failed -> {
           log.w { "Could not fetch ${ref.url}: ${result.status} ${result.reason}" }
-          if (result.status == HTTP_TOO_MANY_REQUESTS) return
+          if (result.status == HTTP_TOO_MANY_REQUESTS)
+            return LineupRun(read, "${ref.url}: ${result.status} ${result.reason}")
         }
       }
     }
+    return LineupRun(read, null)
   }
 }

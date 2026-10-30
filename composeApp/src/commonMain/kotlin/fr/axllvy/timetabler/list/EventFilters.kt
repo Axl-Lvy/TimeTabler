@@ -1,9 +1,7 @@
 package fr.axllvy.timetabler.list
 
 import fr.axllvy.timetabler.domain.normalizeText
-import fr.axllvy.timetabler.domain.tonight
 import fr.axllvy.timetabler.wire.EventDto
-import kotlin.time.Instant
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
@@ -21,17 +19,16 @@ enum class QuickFilter {
 data class NightGroup(val night: LocalDate, val events: List<EventDto>)
 
 /**
- * Upcoming events matching [query] and [filter] at [now], grouped by night in date order. Nights
- * before tonight are dropped. The weekend is the Friday and Saturday nights of the current weekend,
- * or of the next one from Sunday to Thursday.
+ * Upcoming events matching [query] and [filter] when [tonight] is in progress, grouped by night in
+ * date order. Nights before [tonight] are dropped. The weekend is the Friday and Saturday nights of
+ * the current weekend, or of the next one from Sunday to Thursday.
  */
 fun filterEvents(
   events: List<EventDto>,
   query: String,
   filter: QuickFilter,
-  now: Instant,
+  tonight: LocalDate,
 ): List<NightGroup> {
-  val tonight = tonight(now)
   val nights = selectedNights(filter, tonight)
   val terms = normalizeText(query).split(' ').filter { it.isNotEmpty() }
   return events
