@@ -8,6 +8,7 @@ import fr.axllvy.timetabler.wire.ListingDto
 import fr.axllvy.timetabler.wire.ListingStatus
 import fr.axllvy.timetabler.wire.Source
 import fr.axllvy.timetabler.wire.VenueDto
+import fr.axllvy.timetabler.wire.WIRE_SCHEMA_VERSION
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
@@ -113,6 +114,16 @@ abstract class EventStoreLocalContract {
   }
 
   @Test
+  fun schemaVersionFollowsTheAppliedPage() = runTest {
+    val store = newStore()
+    store.schemaVersion() shouldBe null
+
+    store.apply(page(event("a", 1), next = 1))
+
+    store.schemaVersion() shouldBe WIRE_SCHEMA_VERSION
+  }
+
+  @Test
   fun clearForgetsEverything() = runTest {
     val store = newStore()
     store.apply(page(event("a", 1), next = 1))
@@ -123,5 +134,6 @@ abstract class EventStoreLocalContract {
     store.lastRevision() shouldBe Revision.ZERO
     store.hasEverSynced() shouldBe false
     store.epoch() shouldBe null
+    store.schemaVersion() shouldBe null
   }
 }

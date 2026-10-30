@@ -1,6 +1,7 @@
 package fr.axllvy.timetabler.data
 
 import co.touchlab.kermit.Logger
+import fr.axllvy.timetabler.wire.WIRE_SCHEMA_VERSION
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,19 +36,22 @@ class EventSync(private val api: EventsApi, private val store: EventStoreLocal) 
   val state: StateFlow<SyncState> = _state.asStateFlow()
 
   /**
-   * Applies every feed page after the stored revision; concurrent calls run one after another. A
-   * page from a new server epoch clears the store and starts again from the first revision.
+   * Applies every feed page after the stored revision; concurrent calls run one after another.
+   * Events stored in another wire schema, or a page from a new server epoch, clear the store and
+   * start again from the first revision.
    */
   suspend fun syncOnce(): SyncOutcome = running.withLock {
     _state.value = SyncState.SYNCING
     try {
+      if (store.hasEverSynced() && store.schemaVersion() != WIRE_SCHEMA_VERSION) {
+        startOver("Stored events use another wire schema")
+      }
       while (true) {
         val page = api.page(store.lastRevision())
         val epoch = store.epoch()
         if (epoch != null && epoch != page.epoch) {
           // The server database was restored or reseeded: its revisions no longer match ours.
-          log.i { "Server epoch changed, syncing from scratch" }
-          store.clear()
+          startOver("Server epoch changed")
           continue
         }
         store.apply(page)
@@ -64,5 +68,10 @@ class EventSync(private val api: EventsApi, private val store: EventStoreLocal) 
       _state.value = SyncState.OFFLINE
       SyncOutcome.Offline(e.message ?: e::class.simpleName.orEmpty())
     }
+  }
+
+  private suspend fun startOver(reason: String) {
+    log.i { "$reason, syncing from scratch" }
+    store.clear()
   }
 }

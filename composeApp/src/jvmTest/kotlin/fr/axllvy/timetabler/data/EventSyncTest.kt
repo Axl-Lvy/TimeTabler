@@ -1,5 +1,8 @@
 package fr.axllvy.timetabler.data
 
+import fr.axllvy.timetabler.data.room.EventDao
+import fr.axllvy.timetabler.data.room.EventEntity
+import fr.axllvy.timetabler.data.room.MetaEntity
 import fr.axllvy.timetabler.data.room.RoomEventStore
 import fr.axllvy.timetabler.data.room.inMemoryDatabase
 import fr.axllvy.timetabler.domain.EventId
@@ -28,7 +31,8 @@ import kotlinx.datetime.LocalDate
 
 class EventSyncTest {
 
-  private val store = RoomEventStore(inMemoryDatabase())
+  private val database = inMemoryDatabase()
+  private val store = RoomEventStore(database)
   private val sinces = mutableListOf<String?>()
 
   private fun event(id: String, revision: Long) =
@@ -95,6 +99,47 @@ class EventSyncTest {
 
     sinces shouldContainExactly listOf("7", "0")
     store.events().first().map { it.id.value } shouldContainExactly listOf("new")
+  }
+
+  @Test
+  fun `a stored schema older than the app starts the store over`() = runTest {
+    store.apply(EventsPage(listOf(event("old", 7)), emptyList(), Revision(7), false))
+    database.eventDao().setMeta(MetaEntity(EventDao.SCHEMA_VERSION, "0"))
+    val sync =
+      EventSync(
+        apiServing(EventsPage(listOf(event("new", 2)), emptyList(), Revision(2), false)),
+        store,
+      )
+
+    sync.syncOnce() shouldBe SyncOutcome.Ok
+
+    sinces shouldContainExactly listOf("0")
+    store.events().first().map { it.id.value } shouldContainExactly listOf("new")
+  }
+
+  @Test
+  fun `a store synced before schema versions starts over`() = runTest {
+    database.eventDao().setMeta(MetaEntity(EventDao.LAST_REVISION, "7"))
+    database.eventDao().upsertAll(listOf(EventEntity("old", 7, """{"id":"old"}""")))
+    val sync =
+      EventSync(apiServing(EventsPage(emptyList(), emptyList(), Revision(0), false)), store)
+
+    sync.syncOnce() shouldBe SyncOutcome.Ok
+
+    sinces shouldContainExactly listOf("0")
+    store.events().first() shouldBe emptyList()
+  }
+
+  @Test
+  fun `a stale schema is cleared even when offline`() = runTest {
+    store.apply(EventsPage(listOf(event("old", 7)), emptyList(), Revision(7), false))
+    database.eventDao().setMeta(MetaEntity(EventDao.SCHEMA_VERSION, "0"))
+    val offline =
+      EventsApi(HttpClient(MockEngine { throw IOException("no route") }), "https://tt.example")
+
+    EventSync(offline, store).syncOnce().shouldBeInstanceOf<SyncOutcome.Offline>()
+
+    store.hasEverSynced() shouldBe false
   }
 
   @Test
