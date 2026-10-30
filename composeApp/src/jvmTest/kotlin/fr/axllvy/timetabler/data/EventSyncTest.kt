@@ -170,6 +170,60 @@ class EventSyncTest {
   }
 
   @Test
+  fun `pages within a run are not checked against purged removals`() = runTest {
+    val sync =
+      EventSync(
+        apiServing(
+          EventsPage(
+            listOf(event("a", 5)),
+            emptyList(),
+            Revision(5),
+            hasMore = true,
+            purgedThrough = Revision(9),
+          ),
+          EventsPage(
+            listOf(event("b", 12)),
+            emptyList(),
+            Revision(12),
+            hasMore = false,
+            purgedThrough = Revision(9),
+          ),
+        ),
+        store,
+      )
+
+    sync.syncOnce() shouldBe SyncOutcome.Ok
+
+    sinces shouldContainExactly listOf("0", "5")
+    store.events().first().map { it.id.value }.sorted() shouldContainExactly listOf("a", "b")
+  }
+
+  @Test
+  fun `a purge during a resumed run starts the store over`() = runTest {
+    store.apply(EventsPage(listOf(event("a", 7)), emptyList(), Revision(7), false))
+    val sync =
+      EventSync(
+        apiServing(
+          EventsPage(listOf(event("b", 8)), emptyList(), Revision(8), hasMore = true),
+          EventsPage(emptyList(), emptyList(), Revision(12), false, purgedThrough = Revision(10)),
+          EventsPage(
+            listOf(event("c", 12)),
+            emptyList(),
+            Revision(12),
+            false,
+            purgedThrough = Revision(10),
+          ),
+        ),
+        store,
+      )
+
+    sync.syncOnce() shouldBe SyncOutcome.Ok
+
+    sinces shouldContainExactly listOf("7", "8", "0")
+    store.events().first().map { it.id.value } shouldContainExactly listOf("c")
+  }
+
+  @Test
   fun `a stored schema older than the app starts the store over`() = runTest {
     store.apply(EventsPage(listOf(event("old", 7)), emptyList(), Revision(7), false))
     database.eventDao().setMeta(MetaEntity(EventDao.SCHEMA_VERSION, "0"))

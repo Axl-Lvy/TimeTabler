@@ -39,7 +39,8 @@ class EventSync(private val api: EventsApi, private val store: EventStoreLocal) 
   /**
    * Applies every feed page after the stored revision; concurrent calls run one after another.
    * Events stored in another wire schema, a page from a new server epoch, or a page saying removals
-   * after the stored revision were purged, clear the store and start again from the first revision.
+   * after the revision this run resumed from were purged, clear the store and start again from the
+   * first revision.
    */
   suspend fun syncOnce(): SyncOutcome = running.withLock {
     _state.value = SyncState.SYNCING
@@ -47,17 +48,21 @@ class EventSync(private val api: EventsApi, private val store: EventStoreLocal) 
       if (store.hasEverSynced() && store.schemaVersion() != WIRE_SCHEMA_VERSION) {
         startOver("Stored events use another wire schema")
       }
+      // Pages fetched within this run deliver every removal after it, so only this one can be
+      // stale.
+      var resumedFrom = store.lastRevision()
       while (true) {
-        val since = store.lastRevision()
-        val page = api.page(since)
+        val page = api.page(store.lastRevision())
         val epoch = store.epoch()
         if (epoch != null && epoch != page.epoch) {
           // The server database was restored or reseeded: its revisions no longer match ours.
           startOver("Server epoch changed")
+          resumedFrom = Revision.ZERO
           continue
         }
-        if (since > Revision.ZERO && since < page.purgedThrough) {
+        if (resumedFrom > Revision.ZERO && resumedFrom < page.purgedThrough) {
           startOver("Removals newer than the stored revision were purged")
+          resumedFrom = Revision.ZERO
           continue
         }
         store.apply(page)
