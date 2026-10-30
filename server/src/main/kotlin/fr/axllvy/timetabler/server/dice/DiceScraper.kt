@@ -21,7 +21,7 @@ private const val HTTP_TOO_MANY_REQUESTS = 429
 
 /**
  * Counts of one scrape run; [failed] says why it stopped early, null when it completed. [gone]
- * counts the listings DICE no longer lists.
+ * counts the listings the source no longer lists.
  */
 data class ScrapeReport(
   val pages: Int,
