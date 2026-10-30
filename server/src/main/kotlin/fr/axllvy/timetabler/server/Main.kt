@@ -5,8 +5,10 @@ import fr.axllvy.timetabler.server.db.dataSource
 import fr.axllvy.timetabler.server.dice.DiceScraper
 import fr.axllvy.timetabler.server.events.EventStore
 import fr.axllvy.timetabler.server.health.ScrapeRuns
+import fr.axllvy.timetabler.server.http.PlaywrightBrowser
 import fr.axllvy.timetabler.server.http.PoliteFetcher
 import fr.axllvy.timetabler.server.posters.PosterCache
+import fr.axllvy.timetabler.server.shotgun.ShotgunScraper
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
@@ -30,10 +32,20 @@ fun main() {
   val posterFetcher = PoliteFetcher(client, fetcherUserAgent(), minInterval = 250.milliseconds)
   val posters = PosterCache(config.posterDir, posterFetcher)
   val scrapeRuns = ScrapeRuns(store)
+  // Off until DICE and Shotgun listings of one night are matched, or each night shows twice.
+  val shotgun =
+    if (config.shotgunEnabled) ShotgunScraper(PlaywrightBrowser(fetcherUserAgent()), store) else null
   embeddedServer(Netty, port = config.port) {
       timeTablerModule(store, posters, scrapeRuns, config.staticDir, config.auth)
       schedulingModule(
-        ScrapeJobs(scraper, store, posters, scrapeRuns, config.removalRetention),
+        ScrapeJobs(
+          scraper,
+          store,
+          posters,
+          scrapeRuns,
+          config.removalRetention,
+          shotgun = shotgun,
+        ),
         scrapeRuns,
         store,
       )

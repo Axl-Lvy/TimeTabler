@@ -7,6 +7,7 @@ import fr.axllvy.timetabler.server.dice.ScrapeReport
 import fr.axllvy.timetabler.server.events.EventStore
 import fr.axllvy.timetabler.server.health.ScrapeRuns
 import fr.axllvy.timetabler.server.posters.PosterCache
+import fr.axllvy.timetabler.server.shotgun.ShotgunScraper
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -19,7 +20,7 @@ import kotlinx.datetime.toLocalDateTime
 
 /**
  * The scheduled scrape jobs. They run one at a time, record each run in [runs] for `/health`, and
- * log failures instead of throwing.
+ * log failures instead of throwing. The Shotgun jobs do nothing when [shotgun] is null.
  */
 class ScrapeJobs(
   private val scraper: DiceScraper,
@@ -28,6 +29,7 @@ class ScrapeJobs(
   private val runs: ScrapeRuns,
   private val removalRetention: Duration,
   private val clock: Clock = Clock.System,
+  private val shotgun: ShotgunScraper? = null,
 ) {
 
   private val log = Logger.withTag("ScrapeJobs")
@@ -59,6 +61,18 @@ class ScrapeJobs(
       report.copy(posters = fetched ?: 0)
     }
 
+  /** Scrapes the Shotgun agenda and the event pages it links to. */
+  suspend fun shotgunAgenda() {
+    val scraper = shotgun ?: return
+    run(SHOTGUN_AGENDA) { scraper.scrapeAgenda() }
+  }
+
+  /** Re-reads the Shotgun event pages of events starting in the next 48 hours. */
+  suspend fun shotgunRefresh() {
+    val scraper = shotgun ?: return
+    run(SHOTGUN_REFRESH) { scraper.refreshSoon() }
+  }
+
   private suspend fun run(job: String, block: suspend () -> ScrapeReport) {
     oneAtATime.withLock {
       // krontab does not catch: an escaping exception would end every future run of the job.
@@ -83,6 +97,8 @@ class ScrapeJobs(
   private companion object {
     const val AGENDA = "agenda"
     const val REFRESH = "refresh"
+    const val SHOTGUN_AGENDA = "shotgun-agenda"
+    const val SHOTGUN_REFRESH = "shotgun-refresh"
     val SOON = 48.hours
   }
 }

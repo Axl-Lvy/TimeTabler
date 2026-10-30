@@ -5,10 +5,15 @@ import fr.axllvy.timetabler.server.dice.DiceScraper
 import fr.axllvy.timetabler.server.events.EventStore
 import fr.axllvy.timetabler.server.events.ScrapedListing
 import fr.axllvy.timetabler.server.health.ScrapeRuns
+import fr.axllvy.timetabler.server.http.FetchResult
+import fr.axllvy.timetabler.server.http.PageBrowser
+import fr.axllvy.timetabler.server.http.PageLoader
 import fr.axllvy.timetabler.server.http.PoliteFetcher
 import fr.axllvy.timetabler.server.posters.PosterCache
+import fr.axllvy.timetabler.server.shotgun.ShotgunScraper
 import fr.axllvy.timetabler.wire.ListingStatus
 import fr.axllvy.timetabler.wire.Source
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -67,7 +72,7 @@ class ScrapeJobsTest {
       emptyList(),
     )
 
-  private fun TestScope.jobs(engine: MockEngine): ScrapeJobs {
+  private fun TestScope.jobs(engine: MockEngine, shotgun: PageBrowser? = null): ScrapeJobs {
     val fetcher =
       PoliteFetcher(HttpClient(engine), "TimeTabler/test", timeSource = testScheduler.timeSource)
     return ScrapeJobs(
@@ -77,8 +82,16 @@ class ScrapeJobsTest {
       runs,
       30.days,
       clock,
+      shotgun?.let { ShotgunScraper(it, store, clock) },
     )
   }
+
+  private fun throttledBrowser() =
+    object : PageBrowser {
+      override suspend fun <T> session(block: suspend (PageLoader) -> T): T = block {
+        FetchResult.Failed(429, "Too Many Requests")
+      }
+    }
 
   private fun TestScope.throttledJobs() =
     jobs(MockEngine { respondError(HttpStatusCode.TooManyRequests) })
@@ -143,5 +156,40 @@ class ScrapeJobsTest {
     val run = runs.current()!!.getValue("agenda")
     run.failure!! shouldContain "threw"
     run.consecutiveFailures shouldBe 2
+  }
+
+  @Test
+  fun `the Shotgun agenda is recorded as its own job`() = runTest {
+    val jobs = jobs(MockEngine { respondError(HttpStatusCode.NotFound) }, throttledBrowser())
+
+    jobs.shotgunAgenda()
+
+    val runs = store.scrapeRuns()
+    runs.getValue("shotgun-agenda").failure!! shouldContain "429"
+    runs.keys shouldBe setOf("shotgun-agenda")
+  }
+
+  @Test
+  fun `a browser that cannot start is recorded as a failed run`() = runTest {
+    val broken =
+      object : PageBrowser {
+        override suspend fun <T> session(block: suspend (PageLoader) -> T): T =
+          error("Chromium is missing")
+      }
+    val jobs = jobs(MockEngine { respondError(HttpStatusCode.NotFound) }, broken)
+
+    jobs.shotgunAgenda()
+
+    store.scrapeRuns().getValue("shotgun-agenda").failure!! shouldContain "threw"
+  }
+
+  @Test
+  fun `the Shotgun jobs do nothing when Shotgun is off`() = runTest {
+    val jobs = throttledJobs()
+
+    jobs.shotgunAgenda()
+    jobs.shotgunRefresh()
+
+    store.scrapeRuns().keys.shouldBeEmpty()
   }
 }

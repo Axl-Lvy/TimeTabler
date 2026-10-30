@@ -8,8 +8,8 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 
 /**
- * Server settings, read from `TT_*` environment variables. [removalRetention] is how long the feed
- * keeps listing a removed event; [auth] is null when admin sign-in is not configured.
+ * Server settings from `TT_*` env vars. [removalRetention] is how long the feed keeps a removal;
+ * [auth] is null without admin sign-in; [shotgunEnabled] turns on the Shotgun scrape jobs.
  */
 data class ServerConfig(
   val dbUrl: String,
@@ -20,6 +20,7 @@ data class ServerConfig(
   val posterDir: Path,
   val removalRetention: Duration,
   val auth: AuthConfig?,
+  val shotgunEnabled: Boolean = false,
 ) {
   companion object {
     /**
@@ -39,6 +40,7 @@ data class ServerConfig(
             require(it.isPositive()) { "TT_REMOVAL_RETENTION must be positive, was $it" }
           },
         auth = authFromEnv(env),
+        shotgunEnabled = env["TT_SHOTGUN_ENABLED"]?.toBooleanStrict() ?: false,
       )
     }
 
