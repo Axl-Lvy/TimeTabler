@@ -8,6 +8,7 @@ import fr.axllvy.timetabler.wire.ListingDto
 import fr.axllvy.timetabler.wire.ListingStatus
 import fr.axllvy.timetabler.wire.Source
 import fr.axllvy.timetabler.wire.VenueDto
+import fr.axllvy.timetabler.wire.WIRE_JSON
 import fr.axllvy.timetabler.wire.WIRE_SCHEMA_VERSION
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -20,8 +21,11 @@ import kotlinx.datetime.LocalDate
 /** Behaviour every [EventStoreLocal] implementation must have. */
 abstract class EventStoreLocalContract {
 
-  /** A new, empty store. */
+  /** A new, empty store; each test creates at most one. */
   abstract suspend fun newStore(): EventStoreLocal
+
+  /** Writes [json] as event [id]'s stored row, as an older app version might have. */
+  abstract suspend fun writeRawRow(id: String, json: String)
 
   protected fun event(id: String, revision: Long, title: String = "Night $id") =
     EventDto(
@@ -114,13 +118,37 @@ abstract class EventStoreLocalContract {
   }
 
   @Test
+  fun aFreshStoreHasNoSchemaVersion() = runTest {
+    val store = newStore()
+
+    val version = store.schemaVersion()
+
+    version shouldBe null
+  }
+
+  @Test
   fun schemaVersionFollowsTheAppliedPage() = runTest {
     val store = newStore()
-    store.schemaVersion() shouldBe null
 
     store.apply(page(event("a", 1), next = 1))
 
     store.schemaVersion() shouldBe WIRE_SCHEMA_VERSION
+  }
+
+  @Test
+  fun rowsThatNoLongerDecodeAreSkipped() = runTest {
+    val store = newStore()
+    store.apply(page(event("a", 1), next = 1))
+    writeRawRow("partial", """{"id":"partial"}""")
+    writeRawRow(
+      "misdated",
+      WIRE_JSON.encodeToString(EventDto.serializer(), event("misdated", 2))
+        .replace("2026-10-30T22:30:00Z", "soon"),
+    )
+
+    store.apply(page(event("b", 3), next = 3))
+
+    store.events().first().map { it.id.value }.sorted() shouldContainExactly listOf("a", "b")
   }
 
   @Test

@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+// Stores synced before the schema version was recorded hold version 1 events.
+private const val UNVERSIONED_SCHEMA = 1
+
 /** Result of one sync attempt. */
 sealed interface SyncOutcome {
   /** The local store caught up with the server. */
@@ -45,7 +48,8 @@ class EventSync(private val api: EventsApi, private val store: EventStoreLocal) 
   suspend fun syncOnce(): SyncOutcome = running.withLock {
     _state.value = SyncState.SYNCING
     try {
-      if (store.hasEverSynced() && store.schemaVersion() != WIRE_SCHEMA_VERSION) {
+      val stored = store.schemaVersion() ?: UNVERSIONED_SCHEMA
+      if (store.hasEverSynced() && stored != WIRE_SCHEMA_VERSION) {
         startOver("Stored events use another wire schema")
       }
       // Pages fetched within this run deliver every removal after it, so only this one can be

@@ -9,7 +9,6 @@ import fr.axllvy.timetabler.wire.WIRE_JSON
 import fr.axllvy.timetabler.wire.WIRE_SCHEMA_VERSION
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.SerializationException
 
 /** [EventStoreLocal] on Room, for Android, iOS and the JVM. */
 class RoomEventStore(database: TimeTablerDatabase) : EventStoreLocal {
@@ -50,10 +49,11 @@ class RoomEventStore(database: TimeTablerDatabase) : EventStoreLocal {
   override suspend fun clear() = dao.clearAll()
 
   // A row written in an older schema may not decode; the next sync replaces it.
+  // IllegalArgumentException also covers SerializationException and malformed values.
   private fun EventEntity.toDto(): EventDto? =
     try {
       WIRE_JSON.decodeFromString(EventDto.serializer(), json)
-    } catch (_: SerializationException) {
+    } catch (_: IllegalArgumentException) {
       null
     }
 }

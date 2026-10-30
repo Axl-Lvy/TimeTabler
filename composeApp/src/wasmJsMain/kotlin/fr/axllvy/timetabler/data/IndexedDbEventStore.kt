@@ -23,7 +23,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.SerializationException
 
 private const val EVENTS = "events"
 private const val META = "meta"
@@ -70,10 +69,11 @@ class IndexedDbEventStore(private val databaseName: String = "timetabler") : Eve
     cache.value = rows.mapNotNull { decode(it!!.unsafeCast<JsRecord>().value) }
   }
 
+  // IllegalArgumentException also covers SerializationException and malformed values.
   private fun decode(json: String): EventDto? =
     try {
       WIRE_JSON.decodeFromString(EventDto.serializer(), json)
-    } catch (_: SerializationException) {
+    } catch (_: IllegalArgumentException) {
       null
     }
 

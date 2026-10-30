@@ -240,16 +240,22 @@ class EventSyncTest {
   }
 
   @Test
-  fun `a store synced before schema versions starts over`() = runTest {
+  fun `a store synced before schema versions keeps its events`() = runTest {
     database.eventDao().setMeta(MetaEntity(EventDao.LAST_REVISION, "7"))
-    database.eventDao().upsertAll(listOf(EventEntity("old", 7, """{"id":"old"}""")))
+    database
+      .eventDao()
+      .upsertAll(
+        listOf(
+          EventEntity("old", 7, WIRE_JSON.encodeToString(EventDto.serializer(), event("old", 7)))
+        )
+      )
     val sync =
-      EventSync(apiServing(EventsPage(emptyList(), emptyList(), Revision(0), false)), store)
+      EventSync(apiServing(EventsPage(emptyList(), emptyList(), Revision(7), false)), store)
 
     sync.syncOnce() shouldBe SyncOutcome.Ok
 
-    sinces shouldContainExactly listOf("0")
-    store.events().first() shouldBe emptyList()
+    sinces shouldContainExactly listOf("7")
+    store.events().first().map { it.id.value } shouldContainExactly listOf("old")
   }
 
   @Test
