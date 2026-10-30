@@ -31,7 +31,7 @@ fun main() {
   val posters = PosterCache(config.posterDir, posterFetcher)
   val scrapeRuns = ScrapeRuns(store)
   embeddedServer(Netty, port = config.port) {
-      timeTablerModule(store, posters, scrapeRuns, config.staticDir)
+      timeTablerModule(store, posters, scrapeRuns, config.staticDir, config.auth)
       schedulingModule(
         ScrapeJobs(scraper, store, posters, scrapeRuns, config.removalRetention),
         scrapeRuns,

@@ -1,13 +1,15 @@
 package fr.axllvy.timetabler.server
 
+import fr.axllvy.timetabler.server.auth.AuthConfig
 import java.io.File
+import java.net.URI
 import java.nio.file.Path
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 
 /**
  * Server settings, read from `TT_*` environment variables. [removalRetention] is how long the feed
- * keeps listing a removed event.
+ * keeps listing a removed event; [auth] is null when admin sign-in is not configured.
  */
 data class ServerConfig(
   val dbUrl: String,
@@ -17,6 +19,7 @@ data class ServerConfig(
   val staticDir: File?,
   val posterDir: Path,
   val removalRetention: Duration,
+  val auth: AuthConfig?,
 ) {
   companion object {
     /**
@@ -35,7 +38,18 @@ data class ServerConfig(
           (env["TT_REMOVAL_RETENTION"]?.let(Duration::parse) ?: 30.days).also {
             require(it.isPositive()) { "TT_REMOVAL_RETENTION must be positive, was $it" }
           },
+        auth = authFromEnv(env),
       )
+    }
+
+    private fun authFromEnv(env: Map<String, String>): AuthConfig? {
+      val issuer = env["TT_AUTH_ISSUER"]
+      val audience = env["TT_AUTH_AUDIENCE"]
+      if (issuer == null && audience == null) return null
+      checkNotNull(issuer) { "TT_AUTH_ISSUER is not set but TT_AUTH_AUDIENCE is" }
+      checkNotNull(audience) { "TT_AUTH_AUDIENCE is not set but TT_AUTH_ISSUER is" }
+      val jwksUrl = env["TT_AUTH_JWKS_URL"] ?: "${issuer.trimEnd('/')}/jwks"
+      return AuthConfig(issuer, audience, URI(jwksUrl))
     }
   }
 }
