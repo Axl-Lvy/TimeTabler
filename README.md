@@ -1,5 +1,8 @@
 # TimeTabler
 
+[![Quality gate](https://sonarcloud.io/api/project_badges/measure?project=Axl-Lvy_TimeTabler&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Axl-Lvy_TimeTabler)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=Axl-Lvy_TimeTabler&metric=coverage)](https://sonarcloud.io/summary/new_code?id=Axl-Lvy_TimeTabler)
+
 The exact lineup and set times of music events, starting with Paris club nights. Lineups come from
 DICE (and later Shotgun and festival feeds); set times come from the timetables promoters post in
 their Instagram stories.

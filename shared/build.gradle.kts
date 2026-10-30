@@ -6,6 +6,7 @@ plugins {
   alias(libs.plugins.androidKmpLibrary)
   alias(libs.plugins.kotlinX.serialization.plugin)
   alias(libs.plugins.ktfmt)
+  alias(libs.plugins.kover)
 }
 
 kotlin {
@@ -43,3 +44,6 @@ kotlin {
 }
 
 ktfmt { googleStyle() }
+
+// Same engine as composeApp, which merges this report into its own.
+kover { useJacoco("0.8.14") }
