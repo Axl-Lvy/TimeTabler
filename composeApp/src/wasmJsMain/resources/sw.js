@@ -1,7 +1,8 @@
 // Offline support. The production build replaces BUILD and PRECACHE (hashWasmJsBundle in
 // composeApp/build.gradle.kts), so every deploy ships a new worker that caches its whole shell on
 // install: the app opens offline after its first visit, and an old shell is never half replaced.
-// The event feed is never cached here; the app keeps its own copy in IndexedDB.
+// Posters are the only API answers cached here: the app keeps its own copy of the event feed in
+// IndexedDB, and admin answers depend on who is signed in.
 const BUILD = "dev";
 const PRECACHE = /*PRECACHE*/[]/*END*/;
 const SHELL = "timetabler-shell-" + BUILD;
@@ -43,11 +44,11 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith("/v1/events") || url.pathname === "/health") return;
   if (url.pathname.startsWith("/v1/posters/")) {
     event.respondWith(cacheFirst(POSTERS, req));
     return;
   }
+  if (url.pathname.startsWith("/v1/") || url.pathname === "/health") return;
   if (PRECACHE.length === 0) return; // development server: no shell to serve
   // Every page of the app (the list, /event/<id>) is the same single-page shell, offline too.
   event.respondWith(cacheFirst(SHELL, req, req.mode === "navigate" ? "/" : undefined));
