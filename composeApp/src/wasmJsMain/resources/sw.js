@@ -5,6 +5,7 @@
 const BUILD = "dev";
 const PRECACHE = /*PRECACHE*/[]/*END*/;
 const SHELL = "timetabler-shell-" + BUILD;
+// The app prefetches posters into this cache too (POSTER_CACHE_NAME in PosterCache.wasmJs.kt).
 const POSTERS = "timetabler-posters-v1";
 
 self.addEventListener("install", (event) => {

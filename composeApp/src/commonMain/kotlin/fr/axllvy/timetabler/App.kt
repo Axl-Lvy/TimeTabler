@@ -11,9 +11,15 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import coil3.ImageLoader
+import coil3.compose.LocalPlatformContext
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.network.ktor3.KtorNetworkFetcherFactory
+import fr.axllvy.timetabler.data.EventStoreLocal
 import fr.axllvy.timetabler.data.EventSync
+import fr.axllvy.timetabler.data.PosterPrefetcher
+import fr.axllvy.timetabler.data.SyncOutcome
+import fr.axllvy.timetabler.data.posterCache
+import fr.axllvy.timetabler.data.serverBaseUrl
 import fr.axllvy.timetabler.di.appModule
 import fr.axllvy.timetabler.di.platformModule
 import fr.axllvy.timetabler.domain.EventId
@@ -24,7 +30,10 @@ import fr.axllvy.timetabler.nav.EVENT_ROUTE
 import fr.axllvy.timetabler.nav.eventRoute
 import fr.axllvy.timetabler.ui.TimeTablerTheme
 import kotlin.time.Duration.Companion.minutes
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import org.koin.compose.KoinIsolatedContext
 import org.koin.compose.koinInject
 import org.koin.core.KoinApplication
@@ -56,11 +65,17 @@ fun App(koin: KoinApplication, onNavHostReady: suspend (NavController) -> Unit =
   setSingletonImageLoaderFactory { context ->
     ImageLoader.Builder(context).components { add(KtorNetworkFetcherFactory()) }.build()
   }
+  val platformContext = LocalPlatformContext.current
+  val prefetcher =
+    remember(platformContext) { PosterPrefetcher(posterCache(platformContext), serverBaseUrl()) }
   KoinIsolatedContext(context = koin) {
     val sync = koinInject<EventSync>()
-    LaunchedEffect(sync) {
+    val store = koinInject<EventStoreLocal>()
+    LaunchedEffect(sync, store) {
       while (true) {
-        sync.syncOnce()
+        if (sync.syncOnce() == SyncOutcome.Ok) {
+          launch(Dispatchers.Default) { prefetcher.prefetch(store.events().first()) }
+        }
         delay(SYNC_INTERVAL)
       }
     }
