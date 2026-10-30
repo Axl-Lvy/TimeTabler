@@ -59,7 +59,8 @@ class DiceScraper(
    * sub-genre pages when it holds more events than one page shows, then fetches the lineup of every
    * new or changed listing and of every listing whose lineup was never read. A failed agenda page
    * stops the run without fetching lineups; a throttled lineup stops the rest. A run that read
-   * every page marks gone the listings it did not see, on days where it saw every event.
+   * every page marks gone the listings it did not see, on days where no page overflowed or hid an
+   * event.
    */
   suspend fun scrapeAgenda(): ScrapeReport {
     val startedAt = clock.now()
@@ -78,12 +79,13 @@ class DiceScraper(
             is PageRead.Failed -> return stopped(tally, read.reason)
           }
         var listings = page.listings
-        if (page.skipped > 0) covered = false
+        if (page.skipped > 0 || page.formatChanged) covered = false
         if (page.overflow) {
+          // An event without a sub-genre past the first page shows on no page at all.
+          covered = false
           tally.overflowedDays++
           if (page.subGenreUrls.isEmpty()) {
             log.w { "DICE $category on $day overflows with no sub-genres" }
-            covered = false
           }
           for (url in page.subGenreUrls) {
             val subPage =
@@ -94,9 +96,7 @@ class DiceScraper(
             if (subPage.overflow) {
               tally.overflowedSubGenres++
               log.w { "DICE $url lists more events than one page shows" }
-              covered = false
             }
-            if (subPage.skipped > 0) covered = false
             listings = listings + subPage.listings
           }
         }

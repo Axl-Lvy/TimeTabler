@@ -69,6 +69,34 @@ class DiceBrowseParserTest {
   }
 
   @Test
+  fun `a page without a cursor is flagged as changed`() {
+    val html = fixture("dice/day-page.html").replace("\"nextCursor\":null,", "")
+
+    val page = DiceBrowseParser.parse(html)!!
+
+    page.formatChanged shouldBe true
+    page.overflow shouldBe false
+    page.listings shouldHaveSize 5
+  }
+
+  @Test
+  fun `a page without an event list is flagged as changed`() {
+    val html = """<script id="__NEXT_DATA__">{"props":{"pageProps":{"nextCursor":null}}}</script>"""
+
+    val page = DiceBrowseParser.parse(html)!!
+
+    page.formatChanged shouldBe true
+    page.listings.shouldBeEmpty()
+  }
+
+  @Test
+  fun `a page with its event list and cursor is not flagged as changed`() {
+    val page = DiceBrowseParser.parse(fixture("dice/day-page.html"))!!
+
+    page.formatChanged shouldBe false
+  }
+
+  @Test
   fun `flags a page with more events than it shows`() {
     val page = DiceBrowseParser.parse(fixture("dice/day-page-overflow.html"))!!
 

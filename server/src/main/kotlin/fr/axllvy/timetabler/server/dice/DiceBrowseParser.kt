@@ -9,6 +9,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import org.jsoup.Jsoup
 
 /** Music categories of DICE's Paris browse pages that the scraper walks. */
@@ -19,14 +20,15 @@ private const val PARIS_BROWSE = "$DICE_HOST/browse/paris-5b23e8a0e63cc224a4c36a
 
 /**
  * Events of one DICE browse page; [overflow] means DICE had more than the page shows,
- * [subGenreUrls] are the same page narrowed to each sub-genre, and [skipped] counts events that
- * could not be read.
+ * [subGenreUrls] are the same page narrowed to each sub-genre, [skipped] counts events that could
+ * not be read, and [formatChanged] means the page data lacks its event list or cursor.
  */
 data class DiceBrowsePage(
   val listings: List<ScrapedListing>,
   val overflow: Boolean,
   val subGenreUrls: List<String>,
   val skipped: Int = 0,
+  val formatChanged: Boolean = false,
 )
 
 /** Reads DICE browse pages from their embedded page data. */
@@ -39,18 +41,22 @@ object DiceBrowseParser {
    * skipped. Null when the page carries no page data, such as a bot challenge.
    */
   fun parse(html: String): DiceBrowsePage? {
-    val props = Jsoup.parse(html).nextData()["props"]["pageProps"] ?: return null
-    val events = props["events"] as? JsonArray ?: JsonArray(emptyList())
+    val props = Jsoup.parse(html).nextData()["props"]["pageProps"] as? JsonObject ?: return null
+    val events = props["events"] as? JsonArray
     val cursor = props["nextCursor"]
-    val listings = events.mapNotNull { event ->
-      runCatching { toListing(event) }
-        .onFailure { log.w { "Skipping DICE event ${event["id"].string}: ${it.message}" } }
-        .getOrNull()
-    }
+    val formatChanged = events == null || cursor == null
+    if (formatChanged) log.w { "DICE browse page data lacks its event list or cursor" }
+    val listings =
+      events.orEmpty().mapNotNull { event ->
+        runCatching { toListing(event) }
+          .onFailure { log.w { "Skipping DICE event ${event["id"].string}: ${it.message}" } }
+          .getOrNull()
+      }
     return DiceBrowsePage(
       listings = listings,
       overflow = cursor != null && cursor != JsonNull,
-      skipped = events.size - listings.size,
+      skipped = events.orEmpty().size - listings.size,
+      formatChanged = formatChanged,
       subGenreUrls =
         (props["secondaryFilters"] as? JsonArray).orEmpty().mapNotNull {
           it["activateLink"].string?.let { link -> DICE_HOST + link }

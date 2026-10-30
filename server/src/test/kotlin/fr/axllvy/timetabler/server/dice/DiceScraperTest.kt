@@ -317,6 +317,35 @@ class DiceScraperTest {
   }
 
   @Test
+  fun `an overflowing day removes nothing even with complete sub-genre pages`() = runTest {
+    scrapeDjDay(browsePage(listOf("a1", "b1")))
+
+    val report = scraper {
+      when (it.url.toString()) {
+        djDay -> respond(browsePage(listOf("a1"), overflow = true, subGenres = listOf(house)))
+        house -> respond(browsePage(listOf("a1")))
+        else -> null
+      }
+    }
+      .scrapeAgenda()
+
+    report.failed.shouldBeNull()
+    report.gone shouldBe 0
+    storedTitles() shouldContainExactlyInAnyOrder listOf("Night a1", "Night b1")
+  }
+
+  @Test
+  fun `a day page without a cursor removes nothing`() = runTest {
+    scrapeDjDay(browsePage(listOf("a1", "b1")))
+
+    val report = scrapeDjDay(browsePage(listOf("a1")).replace(",\"nextCursor\":null", ""))
+
+    report.failed.shouldBeNull()
+    report.gone shouldBe 0
+    storedTitles() shouldContainExactlyInAnyOrder listOf("Night a1", "Night b1")
+  }
+
+  @Test
   fun `a day with an unreadable event removes nothing`() = runTest {
     scrapeDjDay(browsePage(listOf("a1", "b1")))
     val withBroken =
