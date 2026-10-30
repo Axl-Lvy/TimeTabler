@@ -93,7 +93,9 @@ class AdminAuthTest {
 
   @Test
   fun `completing the sign-in stores the session`() = runTest {
-    val auth = auth { tokens("access-1", "refresh-1", idToken("""{"sub":"owner","name":"Axel"}""")) }
+    val auth = auth {
+      tokens("access-1", "refresh-1", idToken("""{"sub":"owner","name":"Axel"}"""))
+    }
 
     val signedIn = auth.completeSignIn(CodeGrant("the-code", "verifier-1"))
 
