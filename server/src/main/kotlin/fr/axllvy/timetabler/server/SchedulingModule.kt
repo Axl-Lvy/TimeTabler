@@ -9,6 +9,7 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopping
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,12 +24,14 @@ import kotlinx.datetime.toLocalDateTime
 private val log = Logger.withTag("Scheduling")
 
 /**
- * Runs the DICE agenda scrape daily at 03:00 UTC followed by archiving, refreshes events starting
- * soon every 3 hours, and scrapes once at boot when the database is empty.
+ * Runs the DICE agenda scrape daily at 03:00 UTC followed by archiving and by purging removals
+ * older than [removalRetention], refreshes events starting soon every 3 hours, and scrapes once at
+ * boot when the database is empty.
  */
 fun Application.schedulingModule(
   scraper: DiceScraper,
   store: EventStore,
+  removalRetention: Duration,
   clock: Clock = Clock.System,
 ) {
   val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -52,6 +55,8 @@ fun Application.schedulingModule(
     log.i { "DICE agenda: $report" }
     val yesterday = clock.now().toLocalDateTime(PARIS).date.minus(DatePeriod(days = 1))
     log.i { "Archived ${store.archiveBefore(yesterday)} past events" }
+    val purged = store.purgeRemovedBefore(clock.now() - removalRetention)
+    log.i { "Purged $purged removals older than $removalRetention" }
   }
 
   scope.launch { if (store.isEmpty()) guarded("Boot scrape") { agenda() } }

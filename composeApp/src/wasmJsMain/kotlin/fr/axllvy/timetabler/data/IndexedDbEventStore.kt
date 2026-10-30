@@ -11,6 +11,7 @@ import fr.axllvy.timetabler.domain.Revision
 import fr.axllvy.timetabler.wire.EventDto
 import fr.axllvy.timetabler.wire.EventsPage
 import fr.axllvy.timetabler.wire.WIRE_JSON
+import fr.axllvy.timetabler.wire.WIRE_SCHEMA_VERSION
 import kotlin.js.ExperimentalWasmJsInterop
 import kotlin.js.JsAny
 import kotlin.js.toJsString
@@ -27,8 +28,9 @@ private const val EVENTS = "events"
 private const val META = "meta"
 private const val LAST_REVISION = "lastRevision"
 private const val EPOCH = "epoch"
-// Bump to recreate every store on the next open; there are no migrations.
-private const val SCHEMA_VERSION = 1
+private const val WIRE_SCHEMA = "schemaVersion"
+// Bump to recreate every object store on the next open; there are no migrations.
+private const val DATABASE_VERSION = 1
 
 private external interface JsRecord : JsAny {
   var key: String
@@ -53,7 +55,7 @@ class IndexedDbEventStore(private val databaseName: String = "timetabler") : Eve
 
   private suspend fun db(): Database = openLock.withLock {
     database
-      ?: openDatabase(databaseName, SCHEMA_VERSION) { db, _, _ ->
+      ?: openDatabase(databaseName, DATABASE_VERSION) { db, _, _ ->
           listOf(EVENTS, META).forEach { runCatching { db.deleteObjectStore(it) } }
           db.createObjectStore(EVENTS, KeyPath("key"))
           db.createObjectStore(META, KeyPath("key"))
@@ -63,10 +65,17 @@ class IndexedDbEventStore(private val databaseName: String = "timetabler") : Eve
 
   private suspend fun reload() {
     val rows = db().transaction(EVENTS) { objectStore(EVENTS).getAll() }.toList()
-    cache.value = rows.map {
-      WIRE_JSON.decodeFromString(EventDto.serializer(), it!!.unsafeCast<JsRecord>().value)
-    }
+    // A row written in an older schema may not decode; the next sync replaces it.
+    cache.value = rows.mapNotNull { decode(it!!.unsafeCast<JsRecord>().value) }
   }
+
+  // IllegalArgumentException also covers SerializationException and malformed values.
+  private fun decode(json: String): EventDto? =
+    try {
+      WIRE_JSON.decodeFromString(EventDto.serializer(), json)
+    } catch (_: IllegalArgumentException) {
+      null
+    }
 
   override fun events(): Flow<List<EventDto>> =
     cache.onStart { if (cache.value == null) reload() }.filterNotNull()
@@ -83,6 +92,7 @@ class IndexedDbEventStore(private val databaseName: String = "timetabler") : Eve
       page.removed.forEach { events.delete(Key(it.value.toJsString())) }
       objectStore(META).put(record(LAST_REVISION, page.next.value.toString()))
       objectStore(META).put(record(EPOCH, page.epoch))
+      objectStore(META).put(record(WIRE_SCHEMA, WIRE_SCHEMA_VERSION.toString()))
     }
     reload()
   }
@@ -93,6 +103,8 @@ class IndexedDbEventStore(private val databaseName: String = "timetabler") : Eve
   override suspend fun hasEverSynced(): Boolean = meta(LAST_REVISION) != null
 
   override suspend fun epoch(): String? = meta(EPOCH)
+
+  override suspend fun schemaVersion(): Int? = meta(WIRE_SCHEMA)?.toIntOrNull()
 
   override suspend fun clear() {
     db().writeTransaction(EVENTS, META) {

@@ -6,6 +6,7 @@ import fr.axllvy.timetabler.domain.Revision
 import fr.axllvy.timetabler.wire.EventDto
 import fr.axllvy.timetabler.wire.EventsPage
 import fr.axllvy.timetabler.wire.WIRE_JSON
+import fr.axllvy.timetabler.wire.WIRE_SCHEMA_VERSION
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -15,7 +16,7 @@ class RoomEventStore(database: TimeTablerDatabase) : EventStoreLocal {
   private val dao = database.eventDao()
 
   override fun events(): Flow<List<EventDto>> =
-    dao.observeAll().map { rows -> rows.map { it.toDto() } }
+    dao.observeAll().map { rows -> rows.mapNotNull { it.toDto() } }
 
   override fun event(id: EventId): Flow<EventDto?> = dao.observe(id.value).map { it?.toDto() }
 
@@ -32,6 +33,7 @@ class RoomEventStore(database: TimeTablerDatabase) : EventStoreLocal {
       removed = page.removed.map { it.value },
       revision = page.next.value,
       epoch = page.epoch,
+      schemaVersion = WIRE_SCHEMA_VERSION,
     )
   }
 
@@ -42,8 +44,16 @@ class RoomEventStore(database: TimeTablerDatabase) : EventStoreLocal {
 
   override suspend fun epoch(): String? = dao.meta(EventDao.EPOCH)
 
+  override suspend fun schemaVersion(): Int? = dao.meta(EventDao.SCHEMA_VERSION)?.toIntOrNull()
+
   override suspend fun clear() = dao.clearAll()
 
-  private fun EventEntity.toDto(): EventDto =
-    WIRE_JSON.decodeFromString(EventDto.serializer(), json)
+  // A row written in an older schema may not decode; the next sync replaces it.
+  // IllegalArgumentException also covers SerializationException and malformed values.
+  private fun EventEntity.toDto(): EventDto? =
+    try {
+      WIRE_JSON.decodeFromString(EventDto.serializer(), json)
+    } catch (_: IllegalArgumentException) {
+      null
+    }
 }

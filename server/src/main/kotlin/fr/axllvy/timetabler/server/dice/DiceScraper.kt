@@ -12,6 +12,7 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
@@ -20,7 +21,8 @@ private const val HTTP_TOO_MANY_REQUESTS = 429
 
 /**
  * Summary of one scrape run; [failed] says why the run stopped early, null when it completed.
- * [overflowedSubGenres] counts sub-genre pages that still held more events than they show.
+ * [overflowedSubGenres] counts sub-genre pages that still held more events than they show, and
+ * [gone] the listings DICE no longer lists.
  */
 data class ScrapeReport(
   val pages: Int,
@@ -28,6 +30,7 @@ data class ScrapeReport(
   val failed: String?,
   val overflowedDays: Int = 0,
   val overflowedSubGenres: Int = 0,
+  val gone: Int = 0,
 )
 
 /** Scrapes DICE's Paris agenda into the [EventStore]. */
@@ -45,23 +48,30 @@ class DiceScraper(
     var upserted = 0
     var overflowedDays = 0
     var overflowedSubGenres = 0
+    var gone = 0
 
     fun report(failed: String?) =
-      ScrapeReport(pages, upserted, failed, overflowedDays, overflowedSubGenres)
+      ScrapeReport(pages, upserted, failed, overflowedDays, overflowedSubGenres, gone)
   }
 
   /**
    * Walks every day from today to [horizonDays] ahead in each music category, reading a day's
    * sub-genre pages when it holds more events than one page shows, then fetches the lineup of every
    * new or changed listing and of every listing whose lineup was never read. A failed agenda page
-   * stops the run without fetching lineups; a throttled lineup stops the rest.
+   * stops the run without fetching lineups; a throttled lineup stops the rest. A run that read
+   * every page marks gone the listings it did not see, on days where no page overflowed or hid an
+   * event.
    */
   suspend fun scrapeAgenda(): ScrapeReport {
-    val today = clock.now().toLocalDateTime(PARIS).date
+    val startedAt = clock.now()
+    val today = startedAt.toLocalDateTime(PARIS).date
     val tally = Tally()
     val toFetch = linkedMapOf<String, ListingRef>()
+    val seen = mutableSetOf<String>()
+    val coveredDays = mutableSetOf<LocalDate>()
     for (offset in 0..horizonDays) {
       val day = today + DatePeriod(days = offset)
+      var covered = true
       for (category in DICE_CATEGORIES) {
         val page =
           when (val read = readPage(DiceBrowseParser.dayUrl(category, day), tally)) {
@@ -69,10 +79,14 @@ class DiceScraper(
             is PageRead.Failed -> return stopped(tally, read.reason)
           }
         var listings = page.listings
+        if (page.skipped > 0 || page.formatChanged) covered = false
         if (page.overflow) {
+          // An event without a sub-genre past the first page shows on no page at all.
+          covered = false
           tally.overflowedDays++
-          if (page.subGenreUrls.isEmpty())
+          if (page.subGenreUrls.isEmpty()) {
             log.w { "DICE $category on $day overflows with no sub-genres" }
+          }
           for (url in page.subGenreUrls) {
             val subPage =
               when (val read = readPage(url, tally)) {
@@ -87,6 +101,7 @@ class DiceScraper(
           }
         }
         for (listing in listings.distinctBy { it.externalId }) {
+          seen += listing.externalId
           val result = store.upsert(listing)
           if (result.changed) {
             tally.upserted++
@@ -94,6 +109,11 @@ class DiceScraper(
           }
         }
       }
+      if (covered) coveredDays += day
+    }
+    // Seeing nothing at all more likely means DICE served empty pages than that every event left.
+    if (seen.isNotEmpty()) {
+      tally.gone = store.markGone(Source.DICE, seen, coveredDays, startedAt)
     }
     fetchLineups(withUnreadLineups(toFetch))
     return tally.report(null)
