@@ -22,6 +22,7 @@ data class ScrapeRun(
   val lastDay: LocalDate?,
   val overflowedDays: Int,
   val overflowedSubGenres: Int,
+  val posters: Int = 0,
 )
 
 /** This job's history after a run that ended at [at] with [report]. */
@@ -39,6 +40,7 @@ fun ScrapeRun?.after(report: ScrapeReport, at: Instant): ScrapeRun {
     lastDay = report.lastDay,
     overflowedDays = report.overflowedDays,
     overflowedSubGenres = report.overflowedSubGenres,
+    posters = report.posters,
   )
 }
 

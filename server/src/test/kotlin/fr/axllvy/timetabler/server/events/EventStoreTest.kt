@@ -2,6 +2,7 @@ package fr.axllvy.timetabler.server.events
 
 import fr.axllvy.timetabler.domain.Revision
 import fr.axllvy.timetabler.server.PostgresTestDb
+import fr.axllvy.timetabler.server.posters.posterVersion
 import fr.axllvy.timetabler.wire.ListingStatus
 import fr.axllvy.timetabler.wire.Source
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -73,7 +74,7 @@ class EventStoreTest {
     event.nightDate shouldBe LocalDate(2026, 10, 30)
     event.venue.name shouldBe "La Machine du Moulin Rouge"
     event.lineup shouldBe listOf("I Hate Models", "Narciss")
-    event.posterPath shouldBe "/v1/posters/${id.value}"
+    event.posterPath shouldBe "/v1/posters/${id.value}?v=${posterVersion("https://img/a.jpg")}"
     event.listings.single().url shouldBe "https://dice.fm/event/a"
   }
 
@@ -192,6 +193,26 @@ class EventStoreTest {
     first.isNotBlank() shouldBe true
     store.page(Revision.ZERO, 10).epoch shouldBe first
     (other == first) shouldBe false
+  }
+
+  @Test
+  fun `a new poster url gives a new poster path`() = runTest {
+    store.upsert(listing("a"))
+    val before = store.page(Revision.ZERO, 100).events.single().posterPath
+
+    store.upsert(listing("a").copy(posterUrl = "https://img/a-v2.jpg"))
+
+    (store.page(Revision.ZERO, 100).events.single().posterPath == before) shouldBe false
+  }
+
+  @Test
+  fun `lists the posters of events starting soon`() = runTest {
+    val soon = store.upsert(listing("soon", startsAt = now + 20.hours)).id
+    store.upsert(listing("later", startsAt = now + 60.hours))
+    store.upsert(listing("bare", startsAt = now + 10.hours).copy(posterUrl = null))
+
+    store.postersStartingWithin(48.hours) shouldContainExactly
+      listOf(PosterRef(soon, "https://img/soon.jpg"))
   }
 
   @Test

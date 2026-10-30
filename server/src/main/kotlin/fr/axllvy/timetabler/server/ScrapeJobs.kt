@@ -6,8 +6,10 @@ import fr.axllvy.timetabler.server.dice.DiceScraper
 import fr.axllvy.timetabler.server.dice.ScrapeReport
 import fr.axllvy.timetabler.server.events.EventStore
 import fr.axllvy.timetabler.server.health.after
+import fr.axllvy.timetabler.server.posters.PosterCache
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.DatePeriod
@@ -21,6 +23,7 @@ import kotlinx.datetime.toLocalDateTime
 class ScrapeJobs(
   private val scraper: DiceScraper,
   private val store: EventStore,
+  private val posters: PosterCache,
   private val clock: Clock = Clock.System,
 ) {
 
@@ -38,8 +41,13 @@ class ScrapeJobs(
       report
     }
 
-  /** Re-reads the lineups of events starting in the next 48 hours. */
-  suspend fun refresh() = run(REFRESH) { scraper.refreshSoon() }
+  /** Re-reads the lineups of events starting in the next 48 hours and prefetches their posters. */
+  suspend fun refresh() =
+    run(REFRESH) {
+      val report = scraper.refreshSoon()
+      // Posters come from image hosts, not DICE, so a throttled refresh still fetches them.
+      report.copy(posters = posters.prefetch(store.postersStartingWithin(SOON)))
+    }
 
   private suspend fun run(job: String, block: suspend () -> ScrapeReport) {
     runs.withLock {
@@ -67,5 +75,6 @@ class ScrapeJobs(
   private companion object {
     const val AGENDA = "agenda"
     const val REFRESH = "refresh"
+    val SOON = 48.hours
   }
 }

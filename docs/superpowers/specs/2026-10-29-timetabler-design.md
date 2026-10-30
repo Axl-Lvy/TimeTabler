@@ -157,7 +157,7 @@ Available in the app only when the logged-in account has the admin role. It lets
 ### Server API (shape, names are the builder's)
 
 - `GET /v1/events?since=<revision>&limit=`: pages of events, listings, lineups and timetables changed since a server-assigned revision, ordered by revision, plus tombstones for events that left the window or were merged. Read-only for clients.
-- `GET /v1/posters/{id}`: poster images, fetched from DICE or Shotgun once, resized and cached by the server.
+- `GET /v1/posters/{id}?v=<hash of the source URL>`: poster images, fetched from DICE or Shotgun once per source URL, resized, flattened onto the theme background and cached by the server. A source that fails is retried after an hour; posters of events in the next 48 hours are prefetched by the 3-hourly refresh. The `v` query changes with the source, so client caches pick up a new poster.
 - Admin routes: upload a screenshot, read extraction status, edit a timetable, merge and split events.
 - `GET /health`: always 200 while the server runs, with the last run of each scrape job (attempt and success times, failures in a row, pages, listings, upserts, lineups, last agenda day) as JSON for the home-lab exporter.
 

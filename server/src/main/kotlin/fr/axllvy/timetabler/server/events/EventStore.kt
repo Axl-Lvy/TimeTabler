@@ -6,6 +6,7 @@ import fr.axllvy.timetabler.domain.nightDateOf
 import fr.axllvy.timetabler.domain.normalizeText
 import fr.axllvy.timetabler.server.db.transaction
 import fr.axllvy.timetabler.server.health.ScrapeRun
+import fr.axllvy.timetabler.server.posters.posterVersion
 import fr.axllvy.timetabler.wire.EventDto
 import fr.axllvy.timetabler.wire.EventsPage
 import fr.axllvy.timetabler.wire.ListingDto
@@ -30,6 +31,9 @@ import kotlinx.serialization.json.Json
 
 /** Identity of one source listing, enough to fetch and update it. */
 data class ListingRef(val source: Source, val externalId: String, val url: String)
+
+/** An event and the source URL of its poster. */
+data class PosterRef(val id: EventId, val url: String)
 
 /**
  * Result of [EventStore.upsert]: the event the listing belongs to, and whether anything changed.
@@ -196,6 +200,21 @@ class EventStore(private val dataSource: DataSource, private val clock: Clock = 
       }
     }
 
+  /** Posters of live events starting between now and [window] from now. */
+  suspend fun postersStartingWithin(window: Duration): List<PosterRef> =
+    dataSource.transaction { c ->
+      val now = clock.now()
+      c.query(
+        """SELECT id, poster_url FROM event
+           WHERE NOT archived AND poster_url IS NOT NULL AND starts_at >= ? AND starts_at <= ?
+           ORDER BY starts_at""",
+        now.ts(),
+        (now + window).ts(),
+      ) {
+        PosterRef(EventId(it.getObject(1, UUID::class.java).toString()), it.getString(2))
+      }
+    }
+
   /** Listings of live events whose lineup has never been read. */
   suspend fun listingsNeedingLineup(): List<ListingRef> = dataSource.transaction { c ->
     c.query(
@@ -270,7 +289,7 @@ class EventStore(private val dataSource: DataSource, private val clock: Clock = 
         endsAt = endsAt,
         venue = venue,
         lineup = lineup,
-        posterPath = posterUrl?.let { "/v1/posters/$id" },
+        posterPath = posterUrl?.let { "/v1/posters/$id?v=${posterVersion(it)}" },
         listings = listings,
       )
   }

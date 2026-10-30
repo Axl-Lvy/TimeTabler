@@ -27,9 +27,10 @@ fun main() {
   val scraper = DiceScraper(fetcher, store)
   // Posters come from image CDNs built for page loads, so they get a shorter gap than pages.
   val posterFetcher = PoliteFetcher(client, fetcherUserAgent(), minInterval = 250.milliseconds)
+  val posters = PosterCache(config.posterDir, posterFetcher)
   embeddedServer(Netty, port = config.port) {
-      timeTablerModule(store, PosterCache(config.posterDir, posterFetcher), config.staticDir)
-      schedulingModule(ScrapeJobs(scraper, store), store)
+      timeTablerModule(store, posters, config.staticDir)
+      schedulingModule(ScrapeJobs(scraper, store, posters), store)
     }
     .start(wait = true)
 }

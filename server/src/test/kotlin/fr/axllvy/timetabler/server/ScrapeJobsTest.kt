@@ -5,6 +5,7 @@ import fr.axllvy.timetabler.server.dice.DiceScraper
 import fr.axllvy.timetabler.server.events.EventStore
 import fr.axllvy.timetabler.server.events.ScrapedListing
 import fr.axllvy.timetabler.server.http.PoliteFetcher
+import fr.axllvy.timetabler.server.posters.PosterCache
 import fr.axllvy.timetabler.wire.ListingStatus
 import fr.axllvy.timetabler.wire.Source
 import io.kotest.matchers.collections.shouldContainExactly
@@ -13,8 +14,14 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.respondError
 import io.ktor.http.HttpStatusCode
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
+import javax.imageio.ImageIO
+import kotlin.io.path.createTempDirectory
+import kotlin.io.path.listDirectoryEntries
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.time.Clock
@@ -36,7 +43,13 @@ class ScrapeJobsTest {
     db.close()
   }
 
-  private fun listing(id: String, startsAt: Instant) =
+  private val posterDir = createTempDirectory()
+  private val png =
+    ByteArrayOutputStream()
+      .also { ImageIO.write(BufferedImage(10, 10, BufferedImage.TYPE_INT_RGB), "png", it) }
+      .toByteArray()
+
+  private fun listing(id: String, startsAt: Instant, posterUrl: String? = null) =
     ScrapedListing(
       Source.DICE,
       id,
@@ -47,18 +60,49 @@ class ScrapeJobsTest {
       "Rex Club",
       null,
       ListingStatus.ON_SALE,
-      null,
+      posterUrl,
       emptyList(),
     )
 
-  private fun TestScope.throttledJobs(): ScrapeJobs {
+  private fun TestScope.jobs(engine: MockEngine): ScrapeJobs {
     val fetcher =
-      PoliteFetcher(
-        HttpClient(MockEngine { respondError(HttpStatusCode.TooManyRequests) }),
-        "TimeTabler/test",
-        timeSource = testScheduler.timeSource,
+      PoliteFetcher(HttpClient(engine), "TimeTabler/test", timeSource = testScheduler.timeSource)
+    return ScrapeJobs(
+      DiceScraper(fetcher, store, clock),
+      store,
+      PosterCache(posterDir, fetcher),
+      clock,
+    )
+  }
+
+  private fun TestScope.throttledJobs() =
+    jobs(MockEngine { respondError(HttpStatusCode.TooManyRequests) })
+
+  @Test
+  fun `refresh prefetches the posters of events starting soon`() = runTest {
+    store.upsert(
+      listing("soon", Instant.parse("2026-11-07T22:00:00Z"), "https://img.example/soon.png")
+    )
+    store.upsert(
+      listing("later", Instant.parse("2026-11-12T22:00:00Z"), "https://img.example/later.png")
+    )
+    val posters = mutableListOf<String>()
+    val jobs =
+      jobs(
+        MockEngine { request ->
+          val url = request.url.toString()
+          if ("img.example" in url) {
+            posters += url
+            respond(png)
+          } else respondError(HttpStatusCode.NotFound)
+        }
       )
-    return ScrapeJobs(DiceScraper(fetcher, store, clock), store, clock)
+
+    jobs.refresh()
+
+    posters shouldContainExactly listOf("https://img.example/soon.png")
+    posterDir.listDirectoryEntries("*.jpg").size shouldBe 1
+    store.scrapeRuns().getValue("refresh").posters shouldBe 1
   }
 
   @Test
