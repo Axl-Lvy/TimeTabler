@@ -16,6 +16,7 @@ import fr.axllvy.timetabler.data.room.inMemoryDatabase
 import fr.axllvy.timetabler.domain.EventId
 import fr.axllvy.timetabler.domain.Revision
 import fr.axllvy.timetabler.domain.nightDateOf
+import fr.axllvy.timetabler.nav.eventRoute
 import fr.axllvy.timetabler.wire.EventDto
 import fr.axllvy.timetabler.wire.EventsPage
 import fr.axllvy.timetabler.wire.ListingDto
@@ -45,32 +46,31 @@ class AppUiTest {
       }
     )
 
+  private fun possession(): EventDto {
+    val startsAt = Clock.System.now() + 10.hours
+    return EventDto(
+      EventId("e1"),
+      Revision(1),
+      "Possession",
+      nightDateOf(startsAt),
+      startsAt,
+      null,
+      VenueDto("La Machine du Moulin Rouge", null),
+      listOf("I Hate Models", "Narciss"),
+      null,
+      listOf(ListingDto(Source.DICE, "https://dice.fm/event/e1", ListingStatus.ON_SALE)),
+    )
+  }
+
+  private fun storePage(
+    events: List<EventDto>,
+    removed: List<EventId> = emptyList(),
+    revision: Long = 1,
+  ) = runBlocking { store.apply(EventsPage(events, removed, Revision(revision), hasMore = false)) }
+
   @Test
   fun `opening an event shows its lineup and ticket link`() = runComposeUiTest {
-    val startsAt = Clock.System.now() + 10.hours
-    runBlocking {
-      store.apply(
-        EventsPage(
-          listOf(
-            EventDto(
-              EventId("e1"),
-              Revision(1),
-              "Possession",
-              nightDateOf(startsAt),
-              startsAt,
-              null,
-              VenueDto("La Machine du Moulin Rouge", null),
-              listOf("I Hate Models", "Narciss"),
-              null,
-              listOf(ListingDto(Source.DICE, "https://dice.fm/event/e1", ListingStatus.ON_SALE)),
-            )
-          ),
-          emptyList(),
-          Revision(1),
-          hasMore = false,
-        )
-      )
-    }
+    storePage(listOf(possession()))
     setContent { App(testModules) }
 
     waitUntil("Possession shown", timeoutMillis = 5_000) {
@@ -95,5 +95,43 @@ class AppUiTest {
     }
     onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo))
       .assertCountEquals(0)
+  }
+
+  @Test
+  fun `an unknown event id shows Event not found`() = runComposeUiTest {
+    storePage(listOf(possession()))
+    setContent {
+      App(testModules, onNavHostReady = { it.navigate(eventRoute(EventId("missing"))) })
+    }
+
+    waitUntil("Event not found shown", timeoutMillis = 5_000) {
+      onAllNodesWithText("Event not found").fetchSemanticsNodes().isNotEmpty()
+    }
+  }
+
+  @Test
+  fun `an open event removed by a sync shows Event not found`() = runComposeUiTest {
+    storePage(listOf(possession()))
+    setContent { App(testModules, onNavHostReady = { it.navigate(eventRoute(EventId("e1"))) }) }
+    waitUntil("Tickets on DICE shown", timeoutMillis = 5_000) {
+      onAllNodesWithText("Tickets on DICE").fetchSemanticsNodes().isNotEmpty()
+    }
+
+    storePage(emptyList(), removed = listOf(EventId("e1")), revision = 2)
+
+    waitUntil("Event not found shown", timeoutMillis = 5_000) {
+      onAllNodesWithText("Event not found").fetchSemanticsNodes().isNotEmpty()
+    }
+    onNodeWithText("Possession").assertDoesNotExist()
+  }
+
+  @Test
+  fun `an event link opened offline before any sync asks to connect once`() = runComposeUiTest {
+    setContent { App(testModules, onNavHostReady = { it.navigate(eventRoute(EventId("e1"))) }) }
+
+    waitUntil("Connect once to load events shown", timeoutMillis = 5_000) {
+      onAllNodesWithText("Connect once to load events").fetchSemanticsNodes().isNotEmpty()
+    }
+    onNodeWithText("Event not found").assertDoesNotExist()
   }
 }

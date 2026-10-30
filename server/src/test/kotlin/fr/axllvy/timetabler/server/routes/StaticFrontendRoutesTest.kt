@@ -8,7 +8,9 @@ import fr.axllvy.timetabler.server.timeTablerModule
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.writeText
@@ -53,5 +55,19 @@ class StaticFrontendRoutesTest {
       response.headers["Cross-Origin-Opener-Policy"] shouldBe "same-origin"
       response.headers["Cross-Origin-Embedder-Policy"] shouldBe "credentialless"
     }
+  }
+
+  @Test
+  fun `an event page is answered with the app shell`() = app {
+    val response = client.get("/event/3f6c2a5e-1b2d-4c8e-9a7f-0e1d2c3b4a59")
+
+    response.status shouldBe HttpStatusCode.OK
+    response.bodyAsText() shouldBe "<html></html>"
+    response.headers[HttpHeaders.CacheControl] shouldBe "no-cache"
+  }
+
+  @Test
+  fun `a missing file is not answered with the app shell`() = app {
+    client.get("/composeApp.ffffffffffffffffffff.js").status shouldBe HttpStatusCode.NotFound
   }
 }

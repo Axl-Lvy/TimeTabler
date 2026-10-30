@@ -48,6 +48,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (PRECACHE.length === 0) return; // development server: no shell to serve
-  // Every page of the app is the same single-page shell.
+  // Every page of the app (the list, /event/<id>) is the same single-page shell, offline too.
   event.respondWith(cacheFirst(SHELL, req, req.mode === "navigate" ? "/" : undefined));
 });

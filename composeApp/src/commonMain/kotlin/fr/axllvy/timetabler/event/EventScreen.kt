@@ -21,15 +21,21 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import fr.axllvy.timetabler.data.EventStoreLocal
+import fr.axllvy.timetabler.data.EventSync
+import fr.axllvy.timetabler.data.SyncState
 import fr.axllvy.timetabler.domain.EventId
 import fr.axllvy.timetabler.list.Poster
 import fr.axllvy.timetabler.ui.hours
@@ -37,19 +43,48 @@ import fr.axllvy.timetabler.ui.shortDate
 import fr.axllvy.timetabler.wire.EventDto
 import fr.axllvy.timetabler.wire.ListingStatus
 import fr.axllvy.timetabler.wire.Source
+import kotlinx.coroutines.flow.map
 import org.koin.compose.koinInject
 
-/** One event: poster, date and venue, ticket links, and its lineup. */
+/** The stored copy of one event, null when the store does not have it. */
+private class Stored(val event: EventDto?)
+
+/**
+ * One event: poster, date and venue, ticket links, and its lineup; "Event not found" once the store
+ * is known not to have it.
+ */
 @Composable
 fun EventScreen(id: EventId, onBack: () -> Unit) {
   val store = koinInject<EventStoreLocal>()
-  val event by remember(id) { store.event(id) }.collectAsState(initial = null)
+  val sync = koinInject<EventSync>()
+  val stored by remember(id) { store.event(id).map(::Stored) }.collectAsState(initial = null)
+  val syncState by sync.state.collectAsState()
+  var hasEverSynced by remember { mutableStateOf<Boolean?>(null) }
+  LaunchedEffect(syncState) { hasEverSynced = store.hasEverSynced() }
+
   Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
     IconButton(onClick = onBack) {
       Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
     }
-    event?.let { EventDetails(it) }
+    val event = stored?.event
+    when {
+      event != null -> EventDetails(event)
+      stored == null || syncState == SyncState.SYNCING -> Unit
+      hasEverSynced == true -> Message("Event not found")
+      hasEverSynced == false && syncState == SyncState.OFFLINE ->
+        Message("Connect once to load events")
+    }
   }
+}
+
+@Composable
+private fun Message(text: String) {
+  Text(
+    text,
+    color = MaterialTheme.colorScheme.onSurfaceVariant,
+    textAlign = TextAlign.Center,
+    modifier = Modifier.fillMaxWidth().padding(top = 48.dp),
+  )
 }
 
 @OptIn(ExperimentalLayoutApi::class)

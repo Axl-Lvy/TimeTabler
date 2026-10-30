@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -18,6 +19,9 @@ import fr.axllvy.timetabler.di.platformModule
 import fr.axllvy.timetabler.domain.EventId
 import fr.axllvy.timetabler.event.EventScreen
 import fr.axllvy.timetabler.list.EventsScreen
+import fr.axllvy.timetabler.nav.EVENTS_ROUTE
+import fr.axllvy.timetabler.nav.EVENT_ROUTE
+import fr.axllvy.timetabler.nav.eventRoute
 import fr.axllvy.timetabler.ui.TimeTablerTheme
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.delay
@@ -28,9 +32,15 @@ import org.koin.dsl.koinApplication
 
 private val SYNC_INTERVAL = 5.minutes
 
-/** Root composable of the TimeTabler app, wired with [modules]. */
+/**
+ * Root composable of the TimeTabler app, wired with [modules]; [onNavHostReady] runs once its
+ * navigation graph is set.
+ */
 @Composable
-fun App(modules: List<Module> = listOf(platformModule(), appModule)) {
+fun App(
+  modules: List<Module> = listOf(platformModule(), appModule),
+  onNavHostReady: suspend (NavController) -> Unit = {},
+) {
   setSingletonImageLoaderFactory { context ->
     ImageLoader.Builder(context).components { add(KtorNetworkFetcherFactory()) }.build()
   }
@@ -46,17 +56,18 @@ fun App(modules: List<Module> = listOf(platformModule(), appModule)) {
     TimeTablerTheme {
       Surface(Modifier.fillMaxSize()) {
         val navController = rememberNavController()
-        NavHost(navController, startDestination = "events") {
-          composable("events") {
-            EventsScreen(onOpen = { navController.navigate("event/${it.value}") })
+        NavHost(navController, startDestination = EVENTS_ROUTE) {
+          composable(EVENTS_ROUTE) {
+            EventsScreen(onOpen = { navController.navigate(eventRoute(it)) })
           }
-          composable("event/{id}") { entry ->
+          composable(EVENT_ROUTE) { entry ->
             EventScreen(
               EventId(entry.savedStateHandle.get<String>("id").orEmpty()),
               onBack = { navController.popBackStack() },
             )
           }
         }
+        LaunchedEffect(navController) { onNavHostReady(navController) }
       }
     }
   }
