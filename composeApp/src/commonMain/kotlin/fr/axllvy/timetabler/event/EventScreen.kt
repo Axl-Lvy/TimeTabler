@@ -38,13 +38,27 @@ import fr.axllvy.timetabler.data.EventSync
 import fr.axllvy.timetabler.data.SyncState
 import fr.axllvy.timetabler.domain.EventId
 import fr.axllvy.timetabler.list.Poster
+import fr.axllvy.timetabler.ui.dateNames
 import fr.axllvy.timetabler.ui.hours
 import fr.axllvy.timetabler.ui.shortDate
 import fr.axllvy.timetabler.wire.EventDto
+import fr.axllvy.timetabler.wire.ListingDto
 import fr.axllvy.timetabler.wire.ListingStatus
 import fr.axllvy.timetabler.wire.Source
 import kotlinx.coroutines.flow.map
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
+import timetabler.composeapp.generated.resources.Res
+import timetabler.composeapp.generated.resources.event_back
+import timetabler.composeapp.generated.resources.event_lineup
+import timetabler.composeapp.generated.resources.event_no_set_times
+import timetabler.composeapp.generated.resources.event_not_found
+import timetabler.composeapp.generated.resources.event_not_offline
+import timetabler.composeapp.generated.resources.event_source_unknown
+import timetabler.composeapp.generated.resources.event_tickets_on
+import timetabler.composeapp.generated.resources.event_tickets_on_cancelled
+import timetabler.composeapp.generated.resources.event_tickets_on_sold_out
+import timetabler.composeapp.generated.resources.events_connect_once
 
 /** The stored copy of one event, null when the store does not have it. */
 private class Stored(val event: EventDto?)
@@ -64,16 +78,20 @@ fun EventScreen(id: EventId, onBack: () -> Unit) {
 
   Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
     IconButton(onClick = onBack) {
-      Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+      Icon(
+        Icons.AutoMirrored.Filled.ArrowBack,
+        contentDescription = stringResource(Res.string.event_back),
+      )
     }
     val event = stored?.event
     when {
       event != null -> EventDetails(event)
       stored == null || hasEverSynced == null -> Unit
-      syncState == SyncState.IDLE && hasEverSynced == true -> Message("Event not found")
+      syncState == SyncState.IDLE && hasEverSynced == true ->
+        Message(stringResource(Res.string.event_not_found))
       syncState == SyncState.OFFLINE && hasEverSynced == true ->
-        Message("Not in your offline copy. Connect to check.")
-      syncState == SyncState.OFFLINE -> Message("Connect once to load events")
+        Message(stringResource(Res.string.event_not_offline))
+      syncState == SyncState.OFFLINE -> Message(stringResource(Res.string.events_connect_once))
     }
   }
 }
@@ -100,7 +118,7 @@ private fun EventDetails(event: EventDto) {
     modifier = Modifier.padding(top = 10.dp),
   )
   Text(
-    "${shortDate(event.nightDate)} · ${hours(event.startsAt, event.endsAt)} · ${event.venue.name}",
+    "${shortDate(event.nightDate, dateNames())} · ${hours(event.startsAt, event.endsAt)} · ${event.venue.name}",
     style = MaterialTheme.typography.bodyMedium,
     color = MaterialTheme.colorScheme.onSurfaceVariant,
   )
@@ -109,9 +127,7 @@ private fun EventDetails(event: EventDto) {
     modifier = Modifier.padding(vertical = 8.dp),
   ) {
     event.listings.forEach { listing ->
-      Button(onClick = { uriHandler.openUri(listing.url) }) {
-        Text("Tickets on ${listing.source.label()}${listing.status.suffix()}")
-      }
+      Button(onClick = { uriHandler.openUri(listing.url) }) { Text(ticketsLabel(listing)) }
     }
   }
   Surface(
@@ -120,14 +136,14 @@ private fun EventDetails(event: EventDto) {
     modifier = Modifier.fillMaxWidth(),
   ) {
     Text(
-      "No set times yet. They usually land in the promoter's story the day before.",
+      stringResource(Res.string.event_no_set_times),
       style = MaterialTheme.typography.bodySmall,
       modifier = Modifier.padding(10.dp),
     )
   }
   if (event.lineup.isNotEmpty()) {
     Text(
-      "Lineup",
+      stringResource(Res.string.event_lineup),
       style = MaterialTheme.typography.titleSmall,
       modifier = Modifier.padding(top = 12.dp),
     )
@@ -137,17 +153,20 @@ private fun EventDetails(event: EventDto) {
   }
 }
 
-private fun ListingStatus.suffix(): String =
-  when (this) {
-    ListingStatus.SOLD_OUT -> " (sold out)"
-    ListingStatus.CANCELLED -> " (cancelled)"
-    ListingStatus.ON_SALE,
-    ListingStatus.UNKNOWN -> ""
-  }
-
-private fun Source.label(): String =
-  when (this) {
-    Source.DICE -> "DICE"
-    Source.SHOTGUN -> "Shotgun"
-    Source.UNKNOWN -> "Tickets"
-  }
+@Composable
+private fun ticketsLabel(listing: ListingDto): String {
+  val source =
+    when (listing.source) {
+      Source.DICE -> "DICE"
+      Source.SHOTGUN -> "Shotgun"
+      Source.UNKNOWN -> stringResource(Res.string.event_source_unknown)
+    }
+  val label =
+    when (listing.status) {
+      ListingStatus.SOLD_OUT -> Res.string.event_tickets_on_sold_out
+      ListingStatus.CANCELLED -> Res.string.event_tickets_on_cancelled
+      ListingStatus.ON_SALE,
+      ListingStatus.UNKNOWN -> Res.string.event_tickets_on
+    }
+  return stringResource(label, source)
+}

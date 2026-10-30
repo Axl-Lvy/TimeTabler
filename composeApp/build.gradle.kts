@@ -219,20 +219,23 @@ val hashWasmJsBundle by tasks.registering {
     hashEntryFile("styles.css", htmlAttribute = "href")
 
     // Gives the service worker this build's whole shell to precache, and a cache name per build.
-    val shell =
+    // The name hashes every file's content: compose resources keep fixed names, so a string edit
+    // must still ship a new worker.
+    val shellFiles =
       distDir
         .walkTopDown()
         .filter {
           it.isFile && it.name != "sw.js" && !it.name.endsWith(".map") && !it.name.endsWith(".txt")
         }
-        .map { "/" + it.relativeTo(distDir).invariantSeparatorsPath }
-        .sorted()
+        .sortedBy { it.relativeTo(distDir).invariantSeparatorsPath }
         .toList()
-    val build =
-      MessageDigest.getInstance("SHA-256")
-        .digest(File(distDir, "index.html").readBytes() + shell.joinToString("\n").toByteArray())
-        .joinToString("") { "%02x".format(it) }
-        .take(12)
+    val shell = shellFiles.map { "/" + it.relativeTo(distDir).invariantSeparatorsPath }
+    val digest = MessageDigest.getInstance("SHA-256")
+    shellFiles.zip(shell).forEach { (file, path) ->
+      digest.update(path.toByteArray())
+      digest.update(file.readBytes())
+    }
+    val build = digest.digest().joinToString("") { "%02x".format(it) }.take(12)
     val sw = File(distDir, "sw.js")
     val original = sw.readText()
     val rewritten =

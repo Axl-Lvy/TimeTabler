@@ -1,0 +1,53 @@
+<resources>
+  <string name="app_name">TimeTabler</string>
+
+  <!-- Events list -->
+  <string name="events_search_placeholder">Search artist, venue, event…</string>
+  <string name="events_filter_tonight">Tonight</string>
+  <string name="events_filter_weekend">This weekend</string>
+  <string name="events_none">No events</string>
+  <string name="events_none_matching">No events match "%1$s"</string>
+  <string name="events_connect_once">Connect once to load events</string>
+  <string name="night_tonight">Tonight · %1$s</string>
+
+  <!-- Event card badges -->
+  <string name="badge_lineup">lineup</string>
+  <string name="badge_sold_out">sold out</string>
+  <string name="badge_cancelled">cancelled</string>
+
+  <!-- Event screen -->
+  <string name="event_back">Back</string>
+  <string name="event_not_found">Event not found</string>
+  <string name="event_not_offline">Not in your offline copy. Connect to check.</string>
+  <string name="event_tickets_on">Tickets on %1$s</string>
+  <string name="event_tickets_on_sold_out">Tickets on %1$s (sold out)</string>
+  <string name="event_tickets_on_cancelled">Tickets on %1$s (cancelled)</string>
+  <string name="event_source_unknown">Tickets</string>
+  <string name="event_no_set_times">No set times yet. They usually land in the promoter's story the day before.</string>
+  <string name="event_lineup">Lineup</string>
+
+  <!-- Dates, Monday and January first -->
+  <string-array name="day_names_short">
+    <item>Mon</item>
+    <item>Tue</item>
+    <item>Wed</item>
+    <item>Thu</item>
+    <item>Fri</item>
+    <item>Sat</item>
+    <item>Sun</item>
+  </string-array>
+  <string-array name="month_names_short">
+    <item>Jan</item>
+    <item>Feb</item>
+    <item>Mar</item>
+    <item>Apr</item>
+    <item>May</item>
+    <item>Jun</item>
+    <item>Jul</item>
+    <item>Aug</item>
+    <item>Sep</item>
+    <item>Oct</item>
+    <item>Nov</item>
+    <item>Dec</item>
+  </string-array>
+</resources>

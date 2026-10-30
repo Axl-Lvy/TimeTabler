@@ -4,10 +4,12 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import fr.axllvy.timetabler.data.EventStoreLocal
 import fr.axllvy.timetabler.data.EventSync
@@ -20,6 +22,8 @@ import fr.axllvy.timetabler.domain.EventId
 import fr.axllvy.timetabler.domain.Revision
 import fr.axllvy.timetabler.domain.nightDateOf
 import fr.axllvy.timetabler.nav.eventRoute
+import fr.axllvy.timetabler.ui.DateNames
+import fr.axllvy.timetabler.ui.shortDate
 import fr.axllvy.timetabler.wire.EventDto
 import fr.axllvy.timetabler.wire.EventsPage
 import fr.axllvy.timetabler.wire.ListingDto
@@ -35,6 +39,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.headersOf
 import java.io.IOException
+import java.util.Locale
 import kotlin.test.Test
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
@@ -50,6 +55,25 @@ class AppUiTest {
   private val store = RoomEventStore(inMemoryDatabase())
   private val offlineApi = EventsApi(HttpClient(MockEngine { throw IOException("offline") }), "")
   private val testModules = modulesWith(EventSync(offlineApi, store))
+  private val frenchDateNames =
+    DateNames(
+      days = listOf("lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."),
+      months =
+        listOf(
+          "janv.",
+          "févr.",
+          "mars",
+          "avr.",
+          "mai",
+          "juin",
+          "juil.",
+          "août",
+          "sept.",
+          "oct.",
+          "nov.",
+          "déc.",
+        ),
+    )
 
   private fun modulesWith(sync: EventSync) =
     listOf(
@@ -115,6 +139,87 @@ class AppUiTest {
     onNodeWithText("I Hate Models").assertExists()
     onNodeWithText("Narciss").assertExists()
     onNodeWithText("No set times yet", substring = true).assertExists()
+  }
+
+  @Test
+  fun `ticket links name their source and status`() = runComposeUiTest {
+    val listings =
+      listOf(
+        ListingDto(Source.SHOTGUN, "https://shotgun.live/fr/events/e1", ListingStatus.SOLD_OUT),
+        ListingDto(Source.UNKNOWN, "https://example.com/e1", ListingStatus.CANCELLED),
+      )
+    storePage(listOf(possession().copy(listings = listings)))
+    setContent { App(testModules) }
+
+    waitUntil("Possession shown", timeoutMillis = 5_000) {
+      onAllNodesWithText("Possession").fetchSemanticsNodes().isNotEmpty()
+    }
+    onNodeWithText("Possession").performClick()
+
+    waitUntil("Shotgun link shown", timeoutMillis = 5_000) {
+      onAllNodesWithText("Tickets on Shotgun (sold out)").fetchSemanticsNodes().isNotEmpty()
+    }
+    onNodeWithText("Tickets on Tickets (cancelled)").assertExists()
+  }
+
+  @Test
+  fun `a search without matches says so`() = runComposeUiTest {
+    storePage(listOf(possession()))
+    setContent { App(testModules) }
+    waitUntil("Possession shown", timeoutMillis = 5_000) {
+      onAllNodesWithText("Possession").fetchSemanticsNodes().isNotEmpty()
+    }
+
+    onNode(hasSetTextAction()).performTextInput("Nobody")
+
+    waitUntil("no match message shown", timeoutMillis = 5_000) {
+      onAllNodesWithText("No events match \"Nobody\"").fetchSemanticsNodes().isNotEmpty()
+    }
+  }
+
+  @Test
+  fun `a synced empty feed says there are no events`() = runComposeUiTest {
+    val sync =
+      EventSync(apiServing(EventsPage(emptyList(), emptyList(), Revision(1), false)), store)
+
+    setContent { App(modulesWith(sync)) }
+
+    waitUntil("no events message shown", timeoutMillis = 5_000) {
+      onAllNodesWithText("No events").fetchSemanticsNodes().isNotEmpty()
+    }
+  }
+
+  @Test
+  fun `the app follows a french device`() {
+    val default = Locale.getDefault()
+    Locale.setDefault(Locale.FRENCH)
+    try {
+      runComposeUiTest {
+        val event = possession()
+        storePage(listOf(event))
+        setContent { App(testModules) }
+
+        waitUntil("Possession shown", timeoutMillis = 5_000) {
+          onAllNodesWithText("Possession").fetchSemanticsNodes().isNotEmpty()
+        }
+        onNodeWithText("Ce soir").assertExists()
+        onNodeWithText("Ce week-end").assertExists()
+        onNodeWithText(
+            shortDate(event.nightDate, frenchDateNames),
+            substring = true,
+            ignoreCase = true,
+          )
+          .assertExists()
+        onNodeWithText("Possession").performClick()
+
+        waitUntil("Billets sur DICE shown", timeoutMillis = 5_000) {
+          onAllNodesWithText("Billets sur DICE").fetchSemanticsNodes().isNotEmpty()
+        }
+        onNodeWithText("Pas encore d'horaires", substring = true).assertExists()
+      }
+    } finally {
+      Locale.setDefault(default)
+    }
   }
 
   private fun storeOneEvent(title: String) = runBlocking {

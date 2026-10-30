@@ -37,7 +37,16 @@ import fr.axllvy.timetabler.domain.tonight
 import fr.axllvy.timetabler.ui.nightLabel
 import kotlin.time.Clock
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
+import timetabler.composeapp.generated.resources.Res
+import timetabler.composeapp.generated.resources.app_name
+import timetabler.composeapp.generated.resources.events_connect_once
+import timetabler.composeapp.generated.resources.events_filter_tonight
+import timetabler.composeapp.generated.resources.events_filter_weekend
+import timetabler.composeapp.generated.resources.events_none
+import timetabler.composeapp.generated.resources.events_none_matching
+import timetabler.composeapp.generated.resources.events_search_placeholder
 
 /** Every upcoming event, grouped by night, with search and quick filters. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,7 +71,7 @@ fun EventsScreen(onOpen: (EventId) -> Unit) {
 
   Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
     Text(
-      "TimeTabler",
+      stringResource(Res.string.app_name),
       style = MaterialTheme.typography.headlineSmall,
       fontWeight = FontWeight.Bold,
       modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
@@ -70,7 +79,7 @@ fun EventsScreen(onOpen: (EventId) -> Unit) {
     OutlinedTextField(
       value = query,
       onValueChange = { query = it },
-      placeholder = { Text("Search artist, venue, event…") },
+      placeholder = { Text(stringResource(Res.string.events_search_placeholder)) },
       singleLine = true,
       modifier = Modifier.fillMaxWidth(),
     )
@@ -78,10 +87,10 @@ fun EventsScreen(onOpen: (EventId) -> Unit) {
       horizontalArrangement = Arrangement.spacedBy(6.dp),
       modifier = Modifier.padding(vertical = 6.dp),
     ) {
-      Chip("Tonight", filter == QuickFilter.TONIGHT) {
+      Chip(stringResource(Res.string.events_filter_tonight), filter == QuickFilter.TONIGHT) {
         filter = if (filter == QuickFilter.TONIGHT) QuickFilter.ALL else QuickFilter.TONIGHT
       }
-      Chip("This weekend", filter == QuickFilter.WEEKEND) {
+      Chip(stringResource(Res.string.events_filter_weekend), filter == QuickFilter.WEEKEND) {
         filter = if (filter == QuickFilter.WEEKEND) QuickFilter.ALL else QuickFilter.WEEKEND
       }
     }
@@ -102,9 +111,12 @@ fun EventsScreen(onOpen: (EventId) -> Unit) {
     ) {
       when {
         events?.isEmpty() == true && !hasEverSynced && syncState == SyncState.OFFLINE ->
-          Message("Connect once to load events")
+          Message(stringResource(Res.string.events_connect_once))
         groups.isEmpty() && events != null && syncState != SyncState.SYNCING ->
-          Message(if (query.isBlank()) "No events" else "No events match \"$query\"")
+          Message(
+            if (query.isBlank()) stringResource(Res.string.events_none)
+            else stringResource(Res.string.events_none_matching, query)
+          )
         else ->
           LazyColumn(
             contentPadding = PaddingValues(bottom = 24.dp),

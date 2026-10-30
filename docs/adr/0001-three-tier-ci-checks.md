@@ -26,6 +26,11 @@ A `detect` job classifies every run with `dorny/paths-filter` against the diff:
   `compile-multiplat` since the test jobs compile every target. `android-build` stands in for
   MemorChess's emulator tests until TimeTabler has instrumented tests.
 
+A `translations-check` job runs outside the tiers, whenever a `composeResources/values*` directory
+or its checker changes: `.github/scripts/check_translations.py` fails when a locale's keys differ
+from the base `values/` keys or their order. A forced full run includes it and a forced noop skips
+it.
+
 The daily cron and the `- [x] Force running tests` PR body checkbox force full; `[skip-tests]` in
 the title forces noop. Branch protection requires the single aggregator check `All checks passed`.
 

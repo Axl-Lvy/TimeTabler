@@ -1,25 +1,49 @@
 package fr.axllvy.timetabler.ui
 
+import androidx.compose.runtime.Composable
 import fr.axllvy.timetabler.domain.PARIS
 import fr.axllvy.timetabler.wire.ListingDto
 import fr.axllvy.timetabler.wire.ListingStatus
 import kotlin.time.Instant
-import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.Month
 import kotlinx.datetime.toLocalDateTime
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringArrayResource
+import org.jetbrains.compose.resources.stringResource
+import timetabler.composeapp.generated.resources.Res
+import timetabler.composeapp.generated.resources.badge_cancelled
+import timetabler.composeapp.generated.resources.badge_lineup
+import timetabler.composeapp.generated.resources.badge_sold_out
+import timetabler.composeapp.generated.resources.day_names_short
+import timetabler.composeapp.generated.resources.month_names_short
+import timetabler.composeapp.generated.resources.night_tonight
 
-private fun DayOfWeek.short() = name.take(3).lowercase().replaceFirstChar { it.uppercase() }
+/** Abbreviated day and month names of one language, Monday and January first. */
+class DateNames(val days: List<String>, val months: List<String>)
 
-private fun Month.short() = name.take(3).lowercase().replaceFirstChar { it.uppercase() }
+/** Date names in the device language. */
+@Composable
+fun dateNames(): DateNames =
+  DateNames(
+    stringArrayResource(Res.array.day_names_short),
+    stringArrayResource(Res.array.month_names_short),
+  )
 
-/** A date as "Fri 30 Oct". */
-fun shortDate(date: LocalDate): String =
-  "${date.dayOfWeek.short()} ${date.day} ${date.month.short()}"
+/** A date as "Fri 30 Oct" in [names]; names still loading on the web are left out. */
+fun shortDate(date: LocalDate, names: DateNames): String =
+  listOfNotNull(
+      names.days.getOrNull(date.dayOfWeek.ordinal),
+      date.day.toString(),
+      names.months.getOrNull(date.month.ordinal),
+    )
+    .joinToString(" ")
 
 /** Header of a night in the list: "Tonight · Fri 30 Oct" for tonight, else "Sat 31 Oct". */
-fun nightLabel(night: LocalDate, tonight: LocalDate): String =
-  if (night == tonight) "Tonight · ${shortDate(night)}" else shortDate(night)
+@Composable
+fun nightLabel(night: LocalDate, tonight: LocalDate): String {
+  val date = shortDate(night, dateNames())
+  return if (night == tonight) stringResource(Res.string.night_tonight, date) else date
+}
 
 /** Paris wall-clock time of [instant] as "23:30". */
 fun clockTime(instant: Instant): String {
@@ -38,13 +62,21 @@ fun headliners(lineup: List<String>, count: Int = 3): String {
   return if (rest > 0) "$shown +$rest" else shown
 }
 
-/** Badge of an event card: "cancelled" or "sold out" when every listing says so, else "lineup". */
-fun eventBadge(listings: List<ListingDto>): String =
+/** Badge of an event card, with its [label]. */
+enum class EventBadge(val label: StringResource) {
+  LINEUP(Res.string.badge_lineup),
+  SOLD_OUT(Res.string.badge_sold_out),
+  CANCELLED(Res.string.badge_cancelled),
+}
+
+/** Badge of an event card: cancelled or sold out when every listing says so, else lineup. */
+fun eventBadge(listings: List<ListingDto>): EventBadge =
   when {
-    listings.isNotEmpty() && listings.all { it.status == ListingStatus.CANCELLED } -> "cancelled"
+    listings.isNotEmpty() && listings.all { it.status == ListingStatus.CANCELLED } ->
+      EventBadge.CANCELLED
     listings.isNotEmpty() &&
       listings.all {
         it.status == ListingStatus.SOLD_OUT || it.status == ListingStatus.CANCELLED
-      } -> "sold out"
-    else -> "lineup"
+      } -> EventBadge.SOLD_OUT
+    else -> EventBadge.LINEUP
   }

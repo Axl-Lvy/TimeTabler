@@ -1,0 +1,53 @@
+<resources>
+  <string name="app_name">TimeTabler</string>
+
+  <!-- Events list -->
+  <string name="events_search_placeholder">Rechercher un artiste, un lieu, un événement…</string>
+  <string name="events_filter_tonight">Ce soir</string>
+  <string name="events_filter_weekend">Ce week-end</string>
+  <string name="events_none">Aucun événement</string>
+  <string name="events_none_matching">Aucun événement ne correspond à « %1$s »</string>
+  <string name="events_connect_once">Connectez-vous une fois pour charger les événements</string>
+  <string name="night_tonight">Ce soir · %1$s</string>
+
+  <!-- Event card badges -->
+  <string name="badge_lineup">line-up</string>
+  <string name="badge_sold_out">complet</string>
+  <string name="badge_cancelled">annulé</string>
+
+  <!-- Event screen -->
+  <string name="event_back">Retour</string>
+  <string name="event_not_found">Événement introuvable</string>
+  <string name="event_not_offline">Absent de votre copie hors ligne. Connectez-vous pour vérifier.</string>
+  <string name="event_tickets_on">Billets sur %1$s</string>
+  <string name="event_tickets_on_sold_out">Billets sur %1$s (complet)</string>
+  <string name="event_tickets_on_cancelled">Billets sur %1$s (annulé)</string>
+  <string name="event_source_unknown">la billetterie</string>
+  <string name="event_no_set_times">Pas encore d'horaires de passage. Ils arrivent en général la veille dans la story de l'organisateur.</string>
+  <string name="event_lineup">Line-up</string>
+
+  <!-- Dates, Monday and January first -->
+  <string-array name="day_names_short">
+    <item>lun.</item>
+    <item>mar.</item>
+    <item>mer.</item>
+    <item>jeu.</item>
+    <item>ven.</item>
+    <item>sam.</item>
+    <item>dim.</item>
+  </string-array>
+  <string-array name="month_names_short">
+    <item>janv.</item>
+    <item>févr.</item>
+    <item>mars</item>
+    <item>avr.</item>
+    <item>mai</item>
+    <item>juin</item>
+    <item>juil.</item>
+    <item>août</item>
+    <item>sept.</item>
+    <item>oct.</item>
+    <item>nov.</item>
+    <item>déc.</item>
+  </string-array>
+</resources>
