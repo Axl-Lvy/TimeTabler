@@ -4,10 +4,12 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import fr.axllvy.timetabler.data.EventStoreLocal
 import fr.axllvy.timetabler.data.EventSync
@@ -137,6 +139,54 @@ class AppUiTest {
     onNodeWithText("I Hate Models").assertExists()
     onNodeWithText("Narciss").assertExists()
     onNodeWithText("No set times yet", substring = true).assertExists()
+  }
+
+  @Test
+  fun `ticket links name their source and status`() = runComposeUiTest {
+    val listings =
+      listOf(
+        ListingDto(Source.SHOTGUN, "https://shotgun.live/fr/events/e1", ListingStatus.SOLD_OUT),
+        ListingDto(Source.UNKNOWN, "https://example.com/e1", ListingStatus.CANCELLED),
+      )
+    storePage(listOf(possession().copy(listings = listings)))
+    setContent { App(testModules) }
+
+    waitUntil("Possession shown", timeoutMillis = 5_000) {
+      onAllNodesWithText("Possession").fetchSemanticsNodes().isNotEmpty()
+    }
+    onNodeWithText("Possession").performClick()
+
+    waitUntil("Shotgun link shown", timeoutMillis = 5_000) {
+      onAllNodesWithText("Tickets on Shotgun (sold out)").fetchSemanticsNodes().isNotEmpty()
+    }
+    onNodeWithText("Tickets on Tickets (cancelled)").assertExists()
+  }
+
+  @Test
+  fun `a search without matches says so`() = runComposeUiTest {
+    storePage(listOf(possession()))
+    setContent { App(testModules) }
+    waitUntil("Possession shown", timeoutMillis = 5_000) {
+      onAllNodesWithText("Possession").fetchSemanticsNodes().isNotEmpty()
+    }
+
+    onNode(hasSetTextAction()).performTextInput("Nobody")
+
+    waitUntil("no match message shown", timeoutMillis = 5_000) {
+      onAllNodesWithText("No events match \"Nobody\"").fetchSemanticsNodes().isNotEmpty()
+    }
+  }
+
+  @Test
+  fun `a synced empty feed says there are no events`() = runComposeUiTest {
+    val sync =
+      EventSync(apiServing(EventsPage(emptyList(), emptyList(), Revision(1), false)), store)
+
+    setContent { App(modulesWith(sync)) }
+
+    waitUntil("no events message shown", timeoutMillis = 5_000) {
+      onAllNodesWithText("No events").fetchSemanticsNodes().isNotEmpty()
+    }
   }
 
   @Test
