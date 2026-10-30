@@ -82,4 +82,25 @@ class ServerConfigTest {
 
     shouldThrow<IllegalStateException> { ServerConfig.fromEnv(env) }
   }
+
+  @Test
+  fun `Shotgun scraping is off by default`() {
+    val config = ServerConfig.fromEnv(required)
+
+    config.shotgunEnabled shouldBe false
+  }
+
+  @Test
+  fun `Shotgun scraping is turned on from the environment`() {
+    val config = ServerConfig.fromEnv(required + ("TT_SHOTGUN_ENABLED" to "true"))
+
+    config.shotgunEnabled shouldBe true
+  }
+
+  @Test
+  fun `a Shotgun switch that is not a boolean is refused`() {
+    val env = required + ("TT_SHOTGUN_ENABLED" to "yes")
+
+    shouldThrow<IllegalArgumentException> { ServerConfig.fromEnv(env) }
+  }
 }

@@ -18,18 +18,25 @@ COPY --from=build --chown=root:root /workspace/server/build/install/server /app
 COPY --from=build --chown=root:root /workspace/composeApp/build/dist/wasmJs/productionExecutable /app/www
 RUN rm -f /app/www/composeApp.js.map
 
+# Headless Chromium and its system libraries for the Shotgun scraper, installed by the Playwright
+# version the server ships so the two always match.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN java -cp "/app/lib/*" com.microsoft.playwright.CLI install --with-deps --only-shell chromium \
+  && rm -rf /var/lib/apt/lists/* /tmp/playwright-java-*
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
 USER timetabler
 WORKDIR /app
 
-# This container runs nothing else, so the JVM may use most of the deployment's mem_limit.
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75"
+# Chromium shares the deployment's mem_limit during Shotgun runs, so the heap gets only half of it.
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=50"
 ENV TT_STATIC_DIR="/app/www"
 ENV TT_POSTER_DIR="/data/posters"
 
-# Everything else comes from the environment: TT_DB_URL, TT_DB_USER, TT_DB_PASSWORD, optional TT_PORT
-# and TT_REMOVAL_RETENTION (how long removed events stay in the feed, such as 30d). Admin routes need
-# TT_AUTH_ISSUER and TT_AUTH_AUDIENCE (optional TT_AUTH_JWKS_URL, default <issuer>/jwks) and refuse
-# every request without them.
+# Everything else comes from the environment: TT_DB_URL, TT_DB_USER, TT_DB_PASSWORD, optional TT_PORT,
+# TT_REMOVAL_RETENTION (how long removed events stay in the feed, such as 30d) and TT_SHOTGUN_ENABLED
+# (true to scrape Shotgun, off by default). Admin routes need TT_AUTH_ISSUER and TT_AUTH_AUDIENCE
+# (optional TT_AUTH_JWKS_URL, default <issuer>/jwks) and refuse every request without them.
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s CMD wget -qO- http://localhost:8080/health || exit 1
 ENTRYPOINT ["/app/bin/server"]

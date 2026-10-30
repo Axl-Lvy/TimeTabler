@@ -30,6 +30,7 @@ dependencies {
   implementation(libs.postgresql)
   implementation(libs.hikari)
   implementation(libs.jsoup)
+  implementation(libs.playwright)
   implementation(libs.kermit.logging)
   implementation(libs.slf4j.api)
   implementation(libs.ktor.client.core)
@@ -66,6 +67,15 @@ dependencies {
 tasks.test {
   // Docker 29 refuses the API version Testcontainers negotiates by default; 1.40 is a safe floor.
   systemProperty("api.version", System.getenv("DOCKER_API_VERSION") ?: "1.40")
+  // PlaywrightBrowserTest runs a real Chromium only when this is true.
+  inputs.property("browserTests", providers.environmentVariable("TT_BROWSER_TESTS").orElse(""))
+}
+
+// Installs the Chromium this Playwright version drives, with its system libraries, for CI.
+tasks.register<JavaExec>("installPlaywrightChromium") {
+  classpath = sourceSets.main.get().runtimeClasspath
+  mainClass.set("com.microsoft.playwright.CLI")
+  args("install", "--with-deps", "chromium")
 }
 
 // Bakes the build sha into build-info.properties; the Docker build passes -PbuildSha=<sha7>.

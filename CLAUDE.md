@@ -17,6 +17,7 @@ TimeTabler: lineups and set times of music events, Paris first. Design and plans
 | Task | Command |
 |---|---|
 | Server tests (needs Docker) | `./gradlew :server:test` |
+| Real-Chromium browser test | `TT_BROWSER_TESTS=true ./gradlew :server:test --tests '*PlaywrightBrowserTest'` |
 | Shared tests | `./gradlew :shared:jvmTest` |
 | Client tests | `./gradlew :composeApp:jvmTest` and `:composeApp:wasmJsTest` |
 | End-to-end | `./gradlew :e2e:test` |
