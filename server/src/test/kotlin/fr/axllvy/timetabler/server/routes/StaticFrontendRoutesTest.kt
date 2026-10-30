@@ -10,6 +10,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.client.request.get
 import io.ktor.client.request.head
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
@@ -70,6 +71,33 @@ class StaticFrontendRoutesTest {
       val response = client.get(path)
       response.headers["Cross-Origin-Opener-Policy"] shouldBe "same-origin"
       response.headers["Cross-Origin-Embedder-Policy"] shouldBe "credentialless"
+    }
+  }
+
+  @Test
+  fun `an event page is answered with the app shell`() = app {
+    val response = client.get("/event/3f6c2a5e-1b2d-4c8e-9a7f-0e1d2c3b4a59")
+
+    response.status shouldBe HttpStatusCode.OK
+    response.bodyAsText() shouldBe "<html></html>"
+    response.headers[HttpHeaders.CacheControl] shouldBe "no-cache"
+  }
+
+  @Test
+  fun `a missing file is not answered with the app shell`() = app {
+    client.get("/composeApp.ffffffffffffffffffff.js").status shouldBe HttpStatusCode.NotFound
+  }
+
+  @Test
+  fun `a path under event that is not an event id is not answered with the app shell`() = app {
+    for (path in
+      listOf(
+        "/event/composeApp.0123456789abcdef0123.js",
+        "/event/sw.js",
+        "/event/not-an-id",
+        "/event/3f6c2a5e-1b2d-4c8e-9a7f-0e1d2c3b4a59/",
+      )) {
+      client.get(path).status shouldBe HttpStatusCode.NotFound
     }
   }
 }
