@@ -84,6 +84,14 @@ class StaticFrontendRoutesTest {
   }
 
   @Test
+  fun `the admin sign-in callback is answered with the app shell`() = app {
+    val response = client.get("/admin/callback?code=abc&state=xyz")
+
+    response.status shouldBe HttpStatusCode.OK
+    response.bodyAsText() shouldBe "<html></html>"
+  }
+
+  @Test
   fun `a missing file is not answered with the app shell`() = app {
     client.get("/composeApp.ffffffffffffffffffff.js").status shouldBe HttpStatusCode.NotFound
   }

@@ -1,8 +1,11 @@
 package fr.axllvy.timetabler.server
 
+import fr.axllvy.timetabler.server.auth.AuthConfig
+import fr.axllvy.timetabler.server.auth.installAdminAuth
 import fr.axllvy.timetabler.server.events.EventStore
 import fr.axllvy.timetabler.server.health.ScrapeRuns
 import fr.axllvy.timetabler.server.posters.PosterCache
+import fr.axllvy.timetabler.server.routes.adminApiRoutes
 import fr.axllvy.timetabler.server.routes.eventRoutes
 import fr.axllvy.timetabler.server.routes.healthRoute
 import fr.axllvy.timetabler.server.routes.posterRoutes
@@ -19,13 +22,15 @@ import io.ktor.server.routing.routing
 import java.io.File
 
 /**
- * Installs the event feed, poster and health routes, plus the web bundle when [staticDir] is set.
+ * Installs the event feed, poster, health and admin routes, plus the web bundle when [staticDir] is
+ * set. Admin routes accept tokens of the tenant in [auth] and refuse every request without one.
  */
 fun Application.timeTablerModule(
   store: EventStore,
   posters: PosterCache,
   scrapeRuns: ScrapeRuns,
   staticDir: File?,
+  auth: AuthConfig? = null,
 ) {
   install(ContentNegotiation) { json(WIRE_JSON) }
   install(AutoHeadResponse)
@@ -39,10 +44,12 @@ fun Application.timeTablerModule(
       }
     }
   )
+  installAdminAuth(auth)
   routing {
     healthRoute(scrapeRuns)
     eventRoutes(store)
     posterRoutes(store, posters)
+    adminApiRoutes()
     staticDir?.let { staticFrontendRoutes(it) }
   }
 }

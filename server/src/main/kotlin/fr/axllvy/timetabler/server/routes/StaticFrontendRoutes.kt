@@ -17,12 +17,16 @@ private const val HASHED_ASSET_MAX_AGE_SECONDS = 31_536_000
 private val HASHED_ASSET_PATTERN = Regex("""(composeApp|styles)\.[0-9a-f]{20}\.(js|css)""")
 
 /**
- * Client-side pages of the web app, answered with its shell so a reload or a shared link works;
- * must keep matching `eventWebPath` in `composeApp`. Event ids are lowercase UUIDs, so bundle files
- * resolved under `/event/` stay a 404 instead of the shell.
+ * Client-side pages of the web app, answered with its shell so a reload, a shared link or the
+ * sign-in redirect works; must keep matching `eventWebPath` and `ADMIN_CALLBACK_PATH` in
+ * `composeApp`. Event ids are lowercase UUIDs, so bundle files resolved under `/event/` stay a 404
+ * instead of the shell.
  */
 private val APP_PAGES =
-  listOf(Regex("""/event/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"""))
+  listOf(
+    Regex("""/event/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"""),
+    Regex("""/admin/callback"""),
+  )
 
 /**
  * Serves the web bundle at `/` and its shell at every app page: hashed files are cached for a year,

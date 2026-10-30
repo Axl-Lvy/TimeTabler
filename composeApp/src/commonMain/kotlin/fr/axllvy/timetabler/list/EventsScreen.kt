@@ -1,5 +1,6 @@
 package fr.axllvy.timetabler.list
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,8 +28,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import fr.axllvy.timetabler.admin.AdminDialog
 import fr.axllvy.timetabler.data.EventStoreLocal
 import fr.axllvy.timetabler.data.EventSync
 import fr.axllvy.timetabler.data.SyncState
@@ -61,6 +64,7 @@ fun EventsScreen(onOpen: (EventId) -> Unit) {
   var refreshing by remember { mutableStateOf(false) }
   var query by rememberSaveable { mutableStateOf("") }
   var filter by rememberSaveable { mutableStateOf(QuickFilter.ALL) }
+  var showAdmin by rememberSaveable { mutableStateOf(false) }
   LaunchedEffect(syncState) { hasEverSynced = store.hasEverSynced() }
 
   val currentNight by remember { tonightUpdates() }.collectAsState(tonight(Clock.System.now()))
@@ -74,8 +78,13 @@ fun EventsScreen(onOpen: (EventId) -> Unit) {
       stringResource(Res.string.app_name),
       style = MaterialTheme.typography.headlineSmall,
       fontWeight = FontWeight.Bold,
-      modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
+      // The admin's discreet way in: a long press on the title.
+      modifier =
+        Modifier.padding(top = 12.dp, bottom = 8.dp).pointerInput(Unit) {
+          detectTapGestures(onLongPress = { showAdmin = true })
+        },
     )
+    if (showAdmin) AdminDialog(onDismiss = { showAdmin = false })
     OutlinedTextField(
       value = query,
       onValueChange = { query = it },
