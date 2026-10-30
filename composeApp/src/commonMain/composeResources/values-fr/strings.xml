@@ -50,4 +50,17 @@
     <item>nov.</item>
     <item>déc.</item>
   </string-array>
+  <string name="admin_title">Admin</string>
+  <string name="admin_unavailable">La connexion admin n'est pas disponible dans cette app.</string>
+  <string name="admin_sign_in_prompt">Connectez-vous pour gérer les horaires de passage.</string>
+  <string name="admin_signed_in_as">Connecté en tant que %1$s</string>
+  <string name="admin_sign_in">Se connecter</string>
+  <string name="admin_sign_out">Se déconnecter</string>
+  <string name="admin_close">Fermer</string>
+  <string name="admin_cancel">Annuler</string>
+  <string name="admin_checking">Vérification de l'accès admin…</string>
+  <string name="admin_confirmed">Accès admin confirmé</string>
+  <string name="admin_not_admin">Ce compte n'est pas admin</string>
+  <string name="admin_refused">Le serveur a refusé cette session ; déconnectez-vous puis reconnectez-vous</string>
+  <string name="admin_unreachable">Impossible de joindre le serveur</string>
 </resources>

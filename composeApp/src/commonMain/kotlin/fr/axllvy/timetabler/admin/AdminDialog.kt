@@ -19,7 +19,22 @@ import fr.axllvy.timetabler.auth.AdminApi
 import fr.axllvy.timetabler.auth.AdminAuth
 import fr.axllvy.timetabler.auth.AdminCheck
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.getKoin
+import timetabler.composeapp.generated.resources.Res
+import timetabler.composeapp.generated.resources.admin_cancel
+import timetabler.composeapp.generated.resources.admin_checking
+import timetabler.composeapp.generated.resources.admin_close
+import timetabler.composeapp.generated.resources.admin_confirmed
+import timetabler.composeapp.generated.resources.admin_not_admin
+import timetabler.composeapp.generated.resources.admin_refused
+import timetabler.composeapp.generated.resources.admin_sign_in
+import timetabler.composeapp.generated.resources.admin_sign_in_prompt
+import timetabler.composeapp.generated.resources.admin_sign_out
+import timetabler.composeapp.generated.resources.admin_signed_in_as
+import timetabler.composeapp.generated.resources.admin_title
+import timetabler.composeapp.generated.resources.admin_unavailable
+import timetabler.composeapp.generated.resources.admin_unreachable
 
 /** Admin sign-in and sign-out, with what the server makes of the signed-in account. */
 @Composable
@@ -30,9 +45,11 @@ fun AdminDialog(onDismiss: () -> Unit) {
   if (auth == null || api == null) {
     AlertDialog(
       onDismissRequest = onDismiss,
-      title = { Text("Admin") },
-      text = { Text("Admin sign-in is not available in this app.") },
-      confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+      title = { Text(stringResource(Res.string.admin_title)) },
+      text = { Text(stringResource(Res.string.admin_unavailable)) },
+      confirmButton = {
+        TextButton(onClick = onDismiss) { Text(stringResource(Res.string.admin_close)) }
+      },
     )
     return
   }
@@ -44,13 +61,13 @@ fun AdminDialog(onDismiss: () -> Unit) {
   val signedIn = account
   AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text("Admin") },
+    title = { Text(stringResource(Res.string.admin_title)) },
     text = {
       if (signedIn == null) {
-        Text("Sign in to manage timetables.")
+        Text(stringResource(Res.string.admin_sign_in_prompt))
       } else {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          Text("Signed in as ${signedIn.name ?: signedIn.sub}")
+          Text(stringResource(Res.string.admin_signed_in_as, signedIn.name ?: signedIn.sub))
           Text(
             check.label(),
             style = MaterialTheme.typography.bodySmall,
@@ -61,26 +78,31 @@ fun AdminDialog(onDismiss: () -> Unit) {
     },
     confirmButton = {
       if (signedIn == null) {
-        TextButton(onClick = { scope.launch { auth.signIn() } }) { Text("Sign in") }
+        TextButton(onClick = { scope.launch { auth.signIn() } }) {
+          Text(stringResource(Res.string.admin_sign_in))
+        }
       } else {
-        TextButton(onClick = onDismiss) { Text("Close") }
+        TextButton(onClick = onDismiss) { Text(stringResource(Res.string.admin_close)) }
       }
     },
     dismissButton = {
       if (signedIn == null) {
-        TextButton(onClick = onDismiss) { Text("Cancel") }
+        TextButton(onClick = onDismiss) { Text(stringResource(Res.string.admin_cancel)) }
       } else {
-        TextButton(onClick = auth::signOut) { Text("Sign out") }
+        TextButton(onClick = auth::signOut) { Text(stringResource(Res.string.admin_sign_out)) }
       }
     },
   )
 }
 
+@Composable
 private fun AdminCheck?.label(): String =
-  when (this) {
-    null -> "Checking admin access…"
-    is AdminCheck.Admin -> "Admin access confirmed"
-    AdminCheck.NotAdmin -> "This account is not an admin"
-    AdminCheck.SignedOut -> "The server refused this session; sign out and sign in again"
-    AdminCheck.Unreachable -> "Could not reach the server"
-  }
+  stringResource(
+    when (this) {
+      null -> Res.string.admin_checking
+      is AdminCheck.Admin -> Res.string.admin_confirmed
+      AdminCheck.NotAdmin -> Res.string.admin_not_admin
+      AdminCheck.SignedOut -> Res.string.admin_refused
+      AdminCheck.Unreachable -> Res.string.admin_unreachable
+    }
+  )

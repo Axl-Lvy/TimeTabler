@@ -50,4 +50,17 @@
     <item>Nov</item>
     <item>Dec</item>
   </string-array>
+  <string name="admin_title">Admin</string>
+  <string name="admin_unavailable">Admin sign-in is not available in this app.</string>
+  <string name="admin_sign_in_prompt">Sign in to manage timetables.</string>
+  <string name="admin_signed_in_as">Signed in as %1$s</string>
+  <string name="admin_sign_in">Sign in</string>
+  <string name="admin_sign_out">Sign out</string>
+  <string name="admin_close">Close</string>
+  <string name="admin_cancel">Cancel</string>
+  <string name="admin_checking">Checking admin access…</string>
+  <string name="admin_confirmed">Admin access confirmed</string>
+  <string name="admin_not_admin">This account is not an admin</string>
+  <string name="admin_refused">The server refused this session; sign out and sign in again</string>
+  <string name="admin_unreachable">Could not reach the server</string>
 </resources>
